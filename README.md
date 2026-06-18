@@ -2,6 +2,28 @@
 
 `pi-cliproxyapi-provider` registers one [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance as a pi model provider. It discovers models from CLIProxyAPI's OpenAI-compatible `/v1/models` endpoint and enriches them with metadata from [models.dev](https://models.dev/).
 
+## Install
+
+Install from GitHub:
+
+```bash
+pi install git:github.com/0xRichardH/pi-cliproxyapi-provider@master
+```
+
+You can omit `@master`, but pinning a branch, tag, or commit makes installs reproducible:
+
+```bash
+pi install git:github.com/0xRichardH/pi-cliproxyapi-provider@a28f326
+```
+
+Restart pi after installing, then run:
+
+```text
+/cliproxyapi config
+/login cpa
+/model
+```
+
 ## Install for local testing
 
 From this repository:
