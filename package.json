@@ -1,0 +1,19 @@
+{
+  "name": "pi-cliproxyapi-provider",
+  "version": "0.1.0",
+  "description": "Pi provider package for CLIProxyAPI with automatic model discovery and models.dev enrichment.",
+  "type": "module",
+  "keywords": ["pi-package", "cliproxyapi", "provider", "models.dev"],
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "test:unit": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*"
+  },
+  "devDependencies": {}
+}
