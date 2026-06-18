@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { existsSync, statSync } from "node:fs";
-import { loadConfig, projectConfigPath, globalConfigPath, writeConfigFile, type ConfigLayer } from "./config.ts";
+import { loadConfig, projectConfigPath, globalConfigPath, readConfigFile, writeConfigFile, type ConfigLayer } from "./config.ts";
 import { cpaModelsCachePath, discoverModels, modelsDevCachePath } from "./discovery.ts";
 import { buildProviderModels } from "./provider.ts";
 import { getDiscoveryApiKey } from "./auth.ts";
@@ -39,17 +39,35 @@ export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
   const scope = await ctx.ui.select("Save CLIProxyAPI config where?", ["Global", "Project"], { placeholder: "Global" });
   if (!scope) return;
 
-  const providerName = await ctx.ui.input("Provider name", current.providerName);
-  if (!providerName) return;
-  const baseUrl = await ctx.ui.input("CLIProxyAPI base URL", current.baseUrl);
-  if (!baseUrl) return;
-  const authRequired = await ctx.ui.confirm("Require /login credentials?", "Choose yes unless this CLIProxyAPI instance accepts unauthenticated requests.");
+  const path = scope === "Global" ? globalConfigPath() : projectConfigPath(ctx.cwd);
+  const existing = readConfigFile(path);
+  const defaults = existing ?? current;
+
+  if (existing) {
+    ctx.ui.notify(`Editing existing ${scope.toLowerCase()} config at ${path}:\n${JSON.stringify(existing, null, 2)}`, "info");
+  }
+
+  const providerNameInput = await ctx.ui.input(`Provider name (leave blank to keep: ${defaults.providerName})`, `leave blank to keep ${defaults.providerName}`);
+  if (providerNameInput === undefined) return;
+  const baseUrlInput = await ctx.ui.input(`CLIProxyAPI base URL (leave blank to keep: ${defaults.baseUrl})`, `leave blank to keep ${defaults.baseUrl}`);
+  if (baseUrlInput === undefined) return;
+  const authRequired = await ctx.ui.confirm(
+    `Require /login credentials? (current: ${defaults.authRequired ? "yes" : "no"})`,
+    "Choose yes unless this CLIProxyAPI instance accepts unauthenticated requests."
+  );
   const authHeader = authRequired
-    ? await ctx.ui.confirm("Send Authorization bearer header?", "Choose yes for CLIProxyAPI API keys.")
+    ? await ctx.ui.confirm(
+        `Send Authorization bearer header? (current: ${defaults.authHeader ? "yes" : "no"})`,
+        "Choose yes for CLIProxyAPI API keys."
+      )
     : false;
 
-  const config: ConfigLayer = { providerName, baseUrl, authRequired, authHeader };
-  const path = scope === "Global" ? globalConfigPath() : projectConfigPath(ctx.cwd);
+  const config: ConfigLayer = {
+    providerName: providerNameInput || defaults.providerName,
+    baseUrl: baseUrlInput || defaults.baseUrl,
+    authRequired,
+    authHeader,
+  };
   writeConfigFile(path, config);
   ctx.ui.notify(`Saved CLIProxyAPI config to ${path}. Reloading pi to apply it...`, "info");
   await ctx.reload();
