@@ -9,6 +9,18 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function formatStatusFailure(config: ReturnType<typeof loadConfig>, error: unknown): string {
+  return [
+    `CLIProxyAPI status failed: ${errorText(error)}`,
+    `Provider: ${config.providerName}`,
+    `Base URL: ${config.baseUrl}`,
+    `Auth required: ${config.authRequired ? "yes" : "no"}`,
+    "",
+    "Run /cliproxyapi config to set the CLIProxyAPI base URL.",
+    `If you changed config or just ran /login ${config.providerName}, run /reload before selecting models.`,
+  ].join("\n");
+}
+
 function age(path: string): string {
   if (!existsSync(path)) return "missing";
   const seconds = Math.round((Date.now() - statSync(path).mtimeMs) / 1000);
@@ -17,7 +29,7 @@ function age(path: string): string {
   return `${Math.round(seconds / 3600)}h`;
 }
 
-async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
+export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
   if (!ctx.hasUI) {
     ctx.ui.notify("/cliproxyapi config requires an interactive UI.", "warning");
     return;
@@ -39,7 +51,8 @@ async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
   const config: ConfigLayer = { providerName, baseUrl, authRequired, authHeader };
   const path = scope === "Global" ? globalConfigPath() : projectConfigPath(ctx.cwd);
   writeConfigFile(path, config);
-  ctx.ui.notify(`Saved CLIProxyAPI config to ${path}. Run /reload to apply it.`, "info");
+  ctx.ui.notify(`Saved CLIProxyAPI config to ${path}. Reloading pi to apply it...`, "info");
+  await ctx.reload();
 }
 
 async function runStatus(ctx: ExtensionCommandContext, bundledModelsDevPath: string): Promise<void> {
@@ -56,7 +69,7 @@ async function runStatus(ctx: ExtensionCommandContext, bundledModelsDevPath: str
       `models.dev cache: ${discovery.sources.modelsDev}, age ${age(modelsDevCachePath())}`,
     ].join("\n"), "info");
   } catch (error) {
-    ctx.ui.notify(`CLIProxyAPI status failed: ${errorText(error)}`, "error");
+    ctx.ui.notify(formatStatusFailure(config, error), "error");
   }
 }
 
@@ -86,13 +99,17 @@ async function runAliases(ctx: ExtensionCommandContext, bundledModelsDevPath: st
   }
 }
 
+export function cliproxyapiArgumentCompletions(prefix: string): Array<{ value: string; label: string }> {
+  return ["config", "status", "refresh", "aliases", "help"]
+    .filter((item) => item.startsWith(prefix))
+    .map((value) => ({ value, label: value }));
+}
+
 export function registerCliproxyapiCommand(pi: ExtensionAPI, bundledModelsDevPath: string): void {
   pi.registerCommand("cliproxyapi", {
     description: "Configure and inspect the CLIProxyAPI provider.",
     getArgumentCompletions(prefix) {
-      return ["config", "status", "refresh", "aliases", "help"]
-        .filter((item) => item.startsWith(prefix))
-        .map((value) => ({ value }));
+      return cliproxyapiArgumentCompletions(prefix);
     },
     async handler(args, ctx) {
       const subcommand = args.trim().split(/\s+/, 1)[0] || "help";
