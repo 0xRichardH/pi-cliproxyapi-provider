@@ -52,3 +52,13 @@ test("uses explicit pi defaults for unmatched dynamic models", () => {
   });
   assert.equal(result.stats.unmatched, 1);
 });
+
+test("does not share mutable default objects between fallback models", () => {
+  const result = buildProviderModels([{ id: "a" }, { id: "b" }], {}, {});
+
+  result.models[0].input.push("image");
+  result.models[0].cost.input = 99;
+
+  assert.deepEqual(result.models[1].input, ["text"]);
+  assert.equal(result.models[1].cost.input, 0);
+});

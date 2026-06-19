@@ -25,7 +25,7 @@ export async function writeCache<T>(path: string, data: T, fetchedAt = Date.now(
 }
 
 export function isFresh(cache: Pick<CacheEnvelope<unknown>, "fetchedAt"> | undefined, ttlSeconds: number, now = Date.now()): boolean {
-  if (!cache) return false;
+  if (!cache || ttlSeconds <= 0 || cache.fetchedAt > now) return false;
   return now - cache.fetchedAt < ttlSeconds * 1000;
 }
 

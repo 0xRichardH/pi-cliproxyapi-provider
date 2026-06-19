@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { existsSync, statSync } from "node:fs";
-import { loadConfig, projectConfigPath, globalConfigPath, readConfigFile, writeConfigFile, type ConfigLayer } from "./config.ts";
+import { DEFAULT_CONFIG, loadConfig, globalConfigPath, readConfigFile, writeConfigFile, type ConfigLayer } from "./config.ts";
 import { cpaModelsCachePath, discoverModels, modelsDevCachePath } from "./discovery.ts";
 import { buildProviderModels } from "./provider.ts";
 import { getDiscoveryApiKey } from "./auth.ts";
@@ -21,6 +21,16 @@ export function formatStatusFailure(config: ReturnType<typeof loadConfig>, error
   ].join("\n");
 }
 
+function redactConfig(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactConfig);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    const isSecretLike = /authorization|api[-_]?key|token|secret|cookie/i.test(key);
+    return [key, isSecretLike ? "<redacted>" : redactConfig(entry)];
+  }));
+}
+
 function age(path: string): string {
   if (!existsSync(path)) return "missing";
   const seconds = Math.round((Date.now() - statSync(path).mtimeMs) / 1000);
@@ -35,16 +45,24 @@ export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
     return;
   }
 
-  const current = loadConfig(ctx.cwd);
-  const scope = await ctx.ui.select("Save CLIProxyAPI config where?", ["Global", "Project"], { placeholder: "Global" });
-  if (!scope) return;
+  let current = DEFAULT_CONFIG;
+  try {
+    current = loadConfig(ctx.cwd);
+  } catch (error) {
+    ctx.ui.notify(`Existing CLIProxyAPI config is invalid; using defaults for repair: ${errorText(error)}`, "warning");
+  }
 
-  const path = scope === "Global" ? globalConfigPath() : projectConfigPath(ctx.cwd);
-  const existing = readConfigFile(path);
+  const path = globalConfigPath();
+  let existing: ConfigLayer | undefined;
+  try {
+    existing = readConfigFile(path);
+  } catch (error) {
+    ctx.ui.notify(`Existing global CLIProxyAPI config is invalid and will be replaced if you save: ${errorText(error)}`, "warning");
+  }
   const defaults = existing ?? current;
 
   if (existing) {
-    ctx.ui.notify(`Editing existing ${scope.toLowerCase()} config at ${path}:\n${JSON.stringify(existing, null, 2)}`, "info");
+    ctx.ui.notify(`Editing existing global config at ${path}:\n${JSON.stringify(redactConfig(existing), null, 2)}`, "info");
   }
 
   const providerNameInput = await ctx.ui.input(`Provider name (leave blank to keep: ${defaults.providerName})`, `leave blank to keep ${defaults.providerName}`);

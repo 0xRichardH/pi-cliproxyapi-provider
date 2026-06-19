@@ -23,3 +23,9 @@ test("checks cache freshness by TTL", () => {
   assert.equal(isFresh({ fetchedAt: 1000, data: [] }, 10, 10_500), true);
   assert.equal(isFresh({ fetchedAt: 1000, data: [] }, 10, 12_000), false);
 });
+
+test("treats future timestamps and non-positive TTLs as stale", () => {
+  assert.equal(isFresh({ fetchedAt: 20_000, data: [] }, 10, 10_000), false);
+  assert.equal(isFresh({ fetchedAt: 1000, data: [] }, 0, 1000), false);
+  assert.equal(isFresh({ fetchedAt: 1000, data: [] }, -1, 1000), false);
+});

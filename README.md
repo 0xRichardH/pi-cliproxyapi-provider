@@ -48,11 +48,10 @@ Run the interactive command:
 /cliproxyapi config
 ```
 
-It writes non-secret config to one of these files:
+It writes global connection/auth config to:
 
 ```text
 ~/.pi/agent/pi-cliproxyapi-provider/config.json
-.pi/pi-cliproxyapi-provider/config.json
 ```
 
 Environment variables override config:
@@ -64,6 +63,8 @@ CLIPROXYAPI_AUTH_REQUIRED
 CLIPROXYAPI_AUTH_HEADER
 CLIPROXYAPI_MODELS_DEV_ENABLED
 ```
+
+Project config only supports metadata aliases. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
 
 ## Authenticate
 
@@ -97,6 +98,20 @@ export CLIPROXYAPI_API_KEY=your-key
 ## Metadata aliases
 
 Aliases affect metadata only. The package still sends the original CLIProxyAPI model ID to the proxy.
+
+Add global aliases to:
+
+```text
+~/.pi/agent/pi-cliproxyapi-provider/config.json
+```
+
+Add project aliases manually to:
+
+```text
+.pi/pi-cliproxyapi-provider/config.json
+```
+
+Project config only reads `modelAliases`; other fields are ignored.
 
 ```json
 {

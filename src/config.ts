@@ -41,6 +41,33 @@ export function parseBooleanEnv(value: string | undefined): boolean | undefined 
   return undefined;
 }
 
+function normalizeConfig(config: CpaProviderConfig): CpaProviderConfig {
+  return {
+    ...config,
+    authHeader: config.authRequired ? config.authHeader : false,
+  };
+}
+
+function safeProjectConfig(projectConfig?: ConfigLayer): ConfigLayer | undefined {
+  if (!projectConfig) return undefined;
+  return {
+    ...(projectConfig.modelAliases !== undefined ? { modelAliases: projectConfig.modelAliases } : {}),
+  };
+}
+
+function projectConfigLayer(value: unknown, path: string): ConfigLayer {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Project config file must contain a JSON object: ${path}`);
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record.modelAliases !== undefined && !isStringMap(record.modelAliases)) {
+    throw new Error(`modelAliases must be an object with string values in project config file: ${path}`);
+  }
+
+  return safeProjectConfig(record as ConfigLayer) ?? {};
+}
+
 function mergeLayer(base: CpaProviderConfig, layer?: ConfigLayer): CpaProviderConfig {
   if (!layer) return base;
   return {
@@ -69,20 +96,66 @@ export function mergeConfigLayers(
   projectConfig?: ConfigLayer,
   env: NodeJS.ProcessEnv = process.env,
 ): CpaProviderConfig {
-  return mergeLayer(mergeLayer(mergeLayer(DEFAULT_CONFIG, globalConfig), projectConfig), envLayer(env));
+  const envConfig = envLayer(env);
+  return normalizeConfig(mergeLayer(mergeLayer(mergeLayer(DEFAULT_CONFIG, globalConfig), safeProjectConfig(projectConfig)), envConfig));
+}
+
+function isStringMap(value: unknown): value is Record<string, string> {
+  return !!value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function validateConfigLayer(value: unknown, path: string): ConfigLayer {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Config file must contain a JSON object: ${path}`);
+  }
+
+  const record = value as Record<string, unknown>;
+  const stringFields = ["providerName", "baseUrl"];
+  for (const field of stringFields) {
+    if (record[field] !== undefined && typeof record[field] !== "string") {
+      throw new Error(`${field} must be a string in config file: ${path}`);
+    }
+  }
+
+  const booleanFields = ["authRequired", "authHeader", "modelsDevEnabled"];
+  for (const field of booleanFields) {
+    if (record[field] !== undefined && typeof record[field] !== "boolean") {
+      throw new Error(`${field} must be a boolean in config file: ${path}`);
+    }
+  }
+
+  const ttlFields = ["cpaCacheTtlSeconds", "modelsDevCacheTtlSeconds"];
+  for (const field of ttlFields) {
+    if (record[field] !== undefined && (typeof record[field] !== "number" || !Number.isFinite(record[field]) || record[field] <= 0)) {
+      throw new Error(`${field} must be a positive number in config file: ${path}`);
+    }
+  }
+
+  if (record.headers !== undefined && !isStringMap(record.headers)) {
+    throw new Error(`headers must be an object with string values in config file: ${path}`);
+  }
+  if (record.modelAliases !== undefined && !isStringMap(record.modelAliases)) {
+    throw new Error(`modelAliases must be an object with string values in config file: ${path}`);
+  }
+
+  return record as ConfigLayer;
 }
 
 export function readConfigFile(path: string): ConfigLayer | undefined {
   if (!existsSync(path)) return undefined;
-  const parsed = JSON.parse(readFileSync(path, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`Config file must contain a JSON object: ${path}`);
-  }
-  return parsed as ConfigLayer;
+  return validateConfigLayer(JSON.parse(readFileSync(path, "utf8")), path);
+}
+
+export function readProjectConfigFile(path: string): ConfigLayer | undefined {
+  if (!existsSync(path)) return undefined;
+  return projectConfigLayer(JSON.parse(readFileSync(path, "utf8")), path);
 }
 
 export function loadConfig(cwd: string, env: NodeJS.ProcessEnv = process.env): CpaProviderConfig {
-  return mergeConfigLayers(readConfigFile(globalConfigPath()), readConfigFile(projectConfigPath(cwd)), env);
+  return mergeConfigLayers(readConfigFile(globalConfigPath()), readProjectConfigFile(projectConfigPath(cwd)), env);
 }
 
 export function writeConfigFile(path: string, config: ConfigLayer): void {

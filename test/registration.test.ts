@@ -37,3 +37,20 @@ test("uses nonempty placeholder API key for no-auth mode", () => {
   assert.equal(registration.config.apiKey, "cliproxyapi-no-auth");
   assert.equal(registration.config.authHeader, false);
 });
+
+test("forces Authorization header off when auth is disabled", () => {
+  const registration = buildProviderRegistration({
+    providerName: "cpa",
+    baseUrl: "http://localhost:8317/v1",
+    authRequired: false,
+    authHeader: true,
+    headers: {},
+    cpaCacheTtlSeconds: 3600,
+    modelsDevCacheTtlSeconds: 86400,
+    modelsDevEnabled: true,
+    modelAliases: {},
+  }, []);
+
+  assert.equal(registration.config.apiKey, "cliproxyapi-no-auth");
+  assert.equal(registration.config.authHeader, false);
+});

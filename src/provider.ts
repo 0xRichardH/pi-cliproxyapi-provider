@@ -49,11 +49,19 @@ function modelFromMetadata(cpaModel: CpaModel, metadata: ModelsDevMetadata): Pro
   };
 }
 
+function cloneModelDefaults(): typeof PI_MODEL_DEFAULTS {
+  return {
+    ...PI_MODEL_DEFAULTS,
+    input: [...PI_MODEL_DEFAULTS.input],
+    cost: { ...PI_MODEL_DEFAULTS.cost },
+  };
+}
+
 function defaultModel(cpaModel: CpaModel): ProviderModelConfigLike {
   return {
     id: cpaModel.id,
     name: cpaModel.id,
-    ...PI_MODEL_DEFAULTS,
+    ...cloneModelDefaults(),
   };
 }
 
@@ -68,7 +76,7 @@ function emptyMatchMethods(): Record<MetadataMatchMethod, number> {
 }
 
 export function buildUnavailableProviderModels(id = "login-required"): ProviderModelConfigLike[] {
-  return [{ id, name: id, ...PI_MODEL_DEFAULTS }];
+  return [{ id, name: id, ...cloneModelDefaults() }];
 }
 
 export function buildProviderModels(

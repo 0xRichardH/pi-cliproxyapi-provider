@@ -18,7 +18,7 @@ export function buildProviderRegistration(
       baseUrl: config.baseUrl,
       api: "openai-completions",
       apiKey: config.authRequired ? "$CLIPROXYAPI_API_KEY" : "cliproxyapi-no-auth",
-      authHeader: config.authHeader,
+      authHeader: config.authRequired && config.authHeader,
       headers: Object.keys(config.headers).length > 0 ? config.headers : undefined,
       models,
     },
