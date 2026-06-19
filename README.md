@@ -119,7 +119,7 @@ Caches live under:
 ~/.cache/pi-cliproxyapi-provider/
 ```
 
-If models.dev is unreachable, the package uses `data/models-dev-fallback.json`.
+Startup does not fetch `models.dev`. It uses a fresh local `models.dev` cache when present, otherwise it uses `data/models-dev-fallback.json`. Run `/cliproxyapi refresh` to update both the CPA model cache and the `models.dev` metadata cache.
 
 ## Test
 

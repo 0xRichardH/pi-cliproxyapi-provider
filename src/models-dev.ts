@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { ModelsDevCatalog, ModelsDevMetadata } from "./types.ts";
+import { withNetworkTimeout } from "./network.ts";
 
 export const MODELS_DEV_URL = "https://models.dev/models.json";
 
@@ -34,12 +35,14 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
   return catalog;
 }
 
-export async function fetchModelsDevCatalog(): Promise<ModelsDevCatalog> {
-  const response = await fetch(MODELS_DEV_URL, { headers: { Accept: "application/json" } });
-  if (!response.ok) {
-    throw new Error(`models.dev fetch failed: HTTP ${response.status} ${response.statusText}`);
-  }
-  return parseModelsDevCatalog(await response.json());
+export async function fetchModelsDevCatalog(timeoutMs?: number): Promise<ModelsDevCatalog> {
+  return withNetworkTimeout(async (signal) => {
+    const response = await fetch(MODELS_DEV_URL, { headers: { Accept: "application/json" }, signal });
+    if (!response.ok) {
+      throw new Error(`models.dev fetch failed: HTTP ${response.status} ${response.statusText}`);
+    }
+    return parseModelsDevCatalog(await response.json());
+  }, timeoutMs, "models.dev fetch");
 }
 
 export async function readBundledModelsDevFallback(path: string): Promise<ModelsDevCatalog> {

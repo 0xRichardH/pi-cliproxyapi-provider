@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { cacheDir, providerCacheKey, type CpaProviderConfig } from "./config.ts";
 import { fetchCpaModels, type CpaModel } from "./cpa.ts";
-import { getCachedOrFetch } from "./cache.ts";
+import { getCachedOrFetch, isFresh, readCache } from "./cache.ts";
 import { fetchModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
 import type { ModelsDevCatalog } from "./types.ts";
 
@@ -55,11 +55,30 @@ export async function discoverModels(options: {
     };
   }
 
+  if (!options.force) {
+    const cachedModelsDev = await readCache<ModelsDevCatalog>(modelsDevCachePath());
+    if (isFresh(cachedModelsDev, options.config.modelsDevCacheTtlSeconds)) {
+      return {
+        cpaModels: cpa.data,
+        modelsDevCatalog: cachedModelsDev.data,
+        sources: { cpa: cpa.source, modelsDev: "cache" },
+        errors: { cpa: cpa.error },
+      };
+    }
+
+    return {
+      cpaModels: cpa.data,
+      modelsDevCatalog: await readBundledModelsDevFallback(options.bundledModelsDevPath),
+      sources: { cpa: cpa.source, modelsDev: "bundled" },
+      errors: { cpa: cpa.error },
+    };
+  }
+
   try {
     const modelsDev = await getCachedOrFetch({
       path: modelsDevCachePath(),
       ttlSeconds: options.config.modelsDevCacheTtlSeconds,
-      force: options.force,
+      force: true,
       fetchFresh: fetchModelsDevCatalog,
     });
     return {

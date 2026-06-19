@@ -1,3 +1,5 @@
+import { withNetworkTimeout } from "./network.ts";
+
 export interface CpaModel {
   id: string;
   object?: string;
@@ -33,12 +35,15 @@ export function parseCpaModelsResponse(payload: unknown): CpaModel[] {
   });
 }
 
-export async function fetchCpaModels(baseUrl: string, headers: Record<string, string> = {}): Promise<CpaModel[]> {
-  const response = await fetch(modelsEndpoint(baseUrl), {
-    headers: { Accept: "application/json", ...headers },
-  });
-  if (!response.ok) {
-    throw new Error(`CPA model discovery failed: HTTP ${response.status} ${response.statusText}`);
-  }
-  return parseCpaModelsResponse(await response.json());
+export async function fetchCpaModels(baseUrl: string, headers: Record<string, string> = {}, timeoutMs?: number): Promise<CpaModel[]> {
+  return withNetworkTimeout(async (signal) => {
+    const response = await fetch(modelsEndpoint(baseUrl), {
+      headers: { Accept: "application/json", ...headers },
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`CPA model discovery failed: HTTP ${response.status} ${response.statusText}`);
+    }
+    return parseCpaModelsResponse(await response.json());
+  }, timeoutMs, "CPA model discovery");
 }
