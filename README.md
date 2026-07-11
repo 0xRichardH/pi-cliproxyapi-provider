@@ -150,11 +150,4 @@ npm test
 
 ## Release
 
-Releases are published to npm when a `v*` tag is pushed. The tag must match the version in `package.json`.
-
-```bash
-npm version patch
-git push origin master --follow-tags
-```
-
-The repository must have an npm publishing token configured as the GitHub Actions secret `NPM_TOKEN`.
+Releases are published to npm when a matching `v*` tag is pushed. See [RELEASING.md](RELEASING.md) for npm authentication, first-release steps, versioning, verification, and troubleshooting.
