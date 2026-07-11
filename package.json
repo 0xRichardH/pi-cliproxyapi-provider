@@ -3,7 +3,18 @@
   "version": "0.1.0",
   "description": "Pi provider package for CLIProxyAPI with automatic model discovery and models.dev enrichment.",
   "type": "module",
-  "keywords": ["pi-package", "cliproxyapi", "provider", "models.dev"],
+  "license": "MIT",
+  "private": false,
+  "keywords": ["pi-package", "pi-extension", "pi", "cliproxyapi", "provider", "models.dev"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xRichardH/pi-cliproxyapi-provider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0xRichardH/pi-cliproxyapi-provider/issues"
+  },
+  "homepage": "https://github.com/0xRichardH/pi-cliproxyapi-provider#readme",
+  "files": ["src", "extensions", "data", "README.md", "LICENSE"],
   "pi": {
     "extensions": ["./extensions"]
   },
@@ -15,5 +26,16 @@
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-ai": "*"
   },
-  "devDependencies": {}
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.6",
+    "@earendil-works/pi-ai": "0.80.6"
+  }
 }

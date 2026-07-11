@@ -4,13 +4,19 @@
 
 ## Install
 
-Install from GitHub:
+Install from npm:
+
+```bash
+pi install npm:pi-cliproxyapi-provider
+```
+
+Or install from GitHub:
 
 ```bash
 pi install git:github.com/0xRichardH/pi-cliproxyapi-provider@master
 ```
 
-You can omit `@master`, but pinning a branch, tag, or commit makes installs reproducible:
+You can omit `@master`, but pinning a branch, tag, or commit makes Git installs reproducible:
 
 ```bash
 pi install git:github.com/0xRichardH/pi-cliproxyapi-provider@a28f326
@@ -141,3 +147,14 @@ Startup does not fetch `models.dev`. It uses a fresh local `models.dev` cache wh
 ```bash
 npm test
 ```
+
+## Release
+
+Releases are published to npm when a `v*` tag is pushed. The tag must match the version in `package.json`.
+
+```bash
+npm version patch
+git push origin master --follow-tags
+```
+
+The repository must have an npm publishing token configured as the GitHub Actions secret `NPM_TOKEN`.
