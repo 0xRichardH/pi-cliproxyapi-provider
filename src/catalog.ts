@@ -1,7 +1,7 @@
 import { cpaModelsCachePath, discoveryHeaders, modelsDevCachePath } from "./discovery.ts";
 import { readCache, writeCache, type CacheEnvelope } from "./cache.ts";
-import { fetchCpaModels, type CpaModel } from "./cpa.ts";
-import { fetchModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
+import { fetchCpaModels, parseCpaModelsCache, type CpaModel } from "./cpa.ts";
+import { fetchModelsDevCatalog, parseModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
 import { buildProviderModels, type BuildProviderModelsResult } from "./provider.ts";
 import type { CpaProviderConfig, ModelsDevCatalog } from "./types.ts";
 
@@ -36,14 +36,26 @@ export interface ProviderCatalogOptions {
   getApiKey: () => Promise<string | undefined>;
   backgroundTimeoutMs?: number;
   manualTimeoutMs?: number;
+  writeSnapshot?: typeof writeCache;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function sameCpaModels(left: CpaModel[], right: CpaModel[]): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return canonicalJson(left) === canonicalJson(right);
 }
 
 function sameMetadata(left: ModelsDevCatalog, right: ModelsDevCatalog): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return canonicalJson(left) === canonicalJson(right);
 }
 
 export class ProviderCatalog {
@@ -58,7 +70,7 @@ export class ProviderCatalog {
   }
 
   async load(): Promise<CatalogSnapshot> {
-    const cpaCache = await readCache<CpaModel[]>(cpaModelsCachePath(this.options.config));
+    const cpaCache = await readCache(cpaModelsCachePath(this.options.config), parseCpaModelsCache);
     const metadataSnapshot = await this.loadMetadata();
     return this.setSnapshot(cpaCache?.data ?? [], cpaCache?.fetchedAt, metadataSnapshot.data, metadataSnapshot.fetchedAt, metadataSnapshot.source);
   }
@@ -105,10 +117,12 @@ export class ProviderCatalog {
         if (mode === "background" && current.cpaModels.length > 0 && fresh.length === 0) {
           throw new Error("CPA automatic discovery returned no models; retained the last successful snapshot");
         }
-        models.changed = !sameCpaModels(current.cpaModels, fresh);
+        const freshUpdatedAt = Date.now();
+        const changed = !sameCpaModels(current.cpaModels, fresh);
+        await (this.options.writeSnapshot ?? writeCache)(cpaModelsCachePath(this.options.config), fresh, freshUpdatedAt);
         cpaModels = fresh;
-        cpaUpdatedAt = Date.now();
-        await writeCache(cpaModelsCachePath(this.options.config), fresh, cpaUpdatedAt);
+        cpaUpdatedAt = freshUpdatedAt;
+        models.changed = changed;
         models.updated = true;
       } catch (error) {
         models.error = error;
@@ -118,11 +132,13 @@ export class ProviderCatalog {
     if (metadataResult.attempted) {
       try {
         const fresh = await fetchModelsDevCatalog(this.options.manualTimeoutMs ?? 10_000);
-        metadataResult.changed = !sameMetadata(current.metadata, fresh);
+        const freshUpdatedAt = Date.now();
+        const changed = !sameMetadata(current.metadata, fresh);
+        await (this.options.writeSnapshot ?? writeCache)(modelsDevCachePath(), fresh, freshUpdatedAt);
         metadata = fresh;
-        metadataUpdatedAt = Date.now();
+        metadataUpdatedAt = freshUpdatedAt;
         metadataSource = "cache";
-        await writeCache(modelsDevCachePath(), fresh, metadataUpdatedAt);
+        metadataResult.changed = changed;
         metadataResult.updated = true;
       } catch (error) {
         metadataResult.error = error;
@@ -135,7 +151,7 @@ export class ProviderCatalog {
 
   private async loadMetadata(): Promise<{ data: ModelsDevCatalog; fetchedAt?: number; source: MetadataSource }> {
     if (!this.options.config.modelsDevEnabled) return { data: {}, source: "disabled" };
-    const cached = await readCache<ModelsDevCatalog>(modelsDevCachePath());
+    const cached = await readCache(modelsDevCachePath(), parseModelsDevCatalog);
     if (cached) return { data: cached.data, fetchedAt: cached.fetchedAt, source: "cache" };
     return { data: await readBundledModelsDevFallback(this.options.bundledModelsDevPath), source: "bundled" };
   }

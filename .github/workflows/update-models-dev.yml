@@ -33,10 +33,53 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Find unpublished automatic release
+        id: pending
+        shell: bash
+        run: |
+          publish=false
+          release_sha=""
+          version=""
+
+          while read -r sha; do
+            candidate="$(git show "${sha}:package.json" | node --input-type=module -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(input).version));")"
+            published="$(npm view "pi-cliproxyapi-provider@${candidate}" version 2>/dev/null || true)"
+            if [[ -z "$published" ]]; then
+              publish=true
+              release_sha="$sha"
+              version="$candidate"
+              break
+            fi
+          done < <(git log --all --format=%H --grep='^chore: update models.dev fallback (v[0-9].*)$' --reverse)
+
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check out pending release
+        if: steps.pending.outputs.publish == 'true'
+        run: git checkout --detach "${{ steps.pending.outputs.release_sha }}"
+
+      - name: Install pending release dependencies
+        if: steps.pending.outputs.publish == 'true'
+        run: npm ci
+
+      - name: Verify pending release
+        if: steps.pending.outputs.publish == 'true'
+        run: npm run check && npm pack --dry-run
+
+      - name: Publish pending release
+        if: steps.pending.outputs.publish == 'true'
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Update fallback catalog
+        if: steps.pending.outputs.publish != 'true'
         run: npm run update:models-dev
 
       - name: Detect catalog changes
+        if: steps.pending.outputs.publish != 'true'
         id: changes
         shell: bash
         run: |
@@ -60,6 +103,7 @@ jobs:
 
       - name: Commit and push release
         if: steps.changes.outputs.changed == 'true'
+        id: release
         shell: bash
         run: |
           version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
@@ -69,28 +113,10 @@ jobs:
           git add data/models-dev-fallback.json package.json package-lock.json
           git commit -m "chore: update models.dev fallback (v${version})"
           git push origin HEAD:${GITHUB_REF_NAME}
-
-      - name: Detect unpublished automatic release
-        id: release
-        shell: bash
-        run: |
-          version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
-          published="$(npm view "pi-cliproxyapi-provider@${version}" version 2>/dev/null || true)"
-          last_subject="$(git log -1 --pretty=%s)"
-
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ -z "$published" && "$last_subject" == chore:\ update\ models.dev\ fallback* ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
 
-      - name: Verify pending release
-        if: steps.release.outputs.publish == 'true' && steps.changes.outputs.changed != 'true'
-        run: npm run check && npm pack --dry-run
-
-      - name: Publish package
-        if: steps.release.outputs.publish == 'true'
+      - name: Publish new release
+        if: steps.changes.outputs.changed == 'true'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -98,10 +124,10 @@ jobs:
       - name: Summary
         shell: bash
         run: |
-          if [[ "${{ steps.release.outputs.publish }}" == "true" ]]; then
-            echo "Published pi-cliproxyapi-provider@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ steps.pending.outputs.publish }}" == "true" ]]; then
+            echo "Published pending pi-cliproxyapi-provider@${{ steps.pending.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           elif [[ "${{ steps.changes.outputs.changed }}" == "true" ]]; then
-            echo "Updated the fallback catalog, but version ${{ steps.release.outputs.version }} was already present on npm." >> "$GITHUB_STEP_SUMMARY"
+            echo "Published pi-cliproxyapi-provider@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "models.dev fallback and npm are already current." >> "$GITHUB_STEP_SUMMARY"
           fi

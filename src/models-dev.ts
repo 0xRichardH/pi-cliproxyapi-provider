@@ -32,6 +32,9 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
     }
   }
 
+  if (Object.keys(catalog).length === 0 && Object.keys(record).length > 0) {
+    throw new Error("models.dev catalog contained no valid models");
+  }
   return catalog;
 }
 

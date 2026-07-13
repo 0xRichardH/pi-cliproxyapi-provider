@@ -10,7 +10,7 @@ test("writes and reads cache envelopes", async () => {
   try {
     const path = join(dir, "cache.json");
     await writeCache(path, [{ id: "gpt-5.5" }], 1000);
-    const cached = await readCache<{ id: string }[]>(path);
+    const cached = await readCache(path, (value) => value as { id: string }[]);
 
     assert.deepEqual(cached?.data, [{ id: "gpt-5.5" }]);
     assert.equal(cached?.fetchedAt, 1000);

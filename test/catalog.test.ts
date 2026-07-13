@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ProviderCatalog } from "../src/catalog.ts";
 import { cpaModelsCachePath } from "../src/discovery.ts";
 import { writeCache } from "../src/cache.ts";
@@ -37,6 +37,19 @@ function catalog(fallback: string): ProviderCatalog {
   return new ProviderCatalog({ config, bundledModelsDevPath: fallback, getApiKey: async () => undefined, backgroundTimeoutMs: 50 });
 }
 
+test("catalog load ignores malformed source snapshots", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const path = cpaModelsCachePath(config);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({ fetchedAt: Date.now(), data: { id: "not-an-array" } }));
+
+    const snapshot = await catalog(fallback).load();
+
+    assert.deepEqual(snapshot.cpaModels, []);
+    assert.equal(snapshot.built.stats.total, 0);
+  });
+});
+
 test("catalog load is cache-first and performs no network request", async () => {
   await withTempHome(async (_home, fallback) => {
     await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }], 1234);
@@ -46,6 +59,25 @@ test("catalog load is cache-first and performs no network request", async () => 
       const snapshot = await catalog(fallback).load();
       assert.deepEqual(snapshot.cpaModels.map((model) => model.id), ["cached"]);
       assert.equal(snapshot.cpaUpdatedAt, 1234);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("metadata comparison ignores object key order", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const instance = catalog(fallback);
+    await instance.load();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      assert.equal(String(url), "https://models.dev/models.json");
+      return new Response(JSON.stringify({ "openai/fresh": { reasoning: true, name: "Fresh", id: "openai/fresh" } }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const result = await instance.refresh("metadata", "manual");
+      assert.equal(result.metadata.updated, true);
+      assert.equal(result.metadata.changed, false);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -68,6 +100,29 @@ test("background refresh updates CPA models while retaining metadata", async () 
       assert.equal(result.models.changed, true);
       assert.deepEqual(result.snapshot.cpaModels.map((model) => model.id), ["fresh"]);
       assert.equal(result.snapshot.built.models[0].reasoning, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("snapshot write failure preserves the in-memory CPA snapshot", async () => {
+  await withTempHome(async (_home, fallback) => {
+    await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }]);
+    const instance = new ProviderCatalog({
+      config,
+      bundledModelsDevPath: fallback,
+      getApiKey: async () => undefined,
+      writeSnapshot: async () => { throw new Error("disk full"); },
+    });
+    await instance.load();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: [{ id: "fresh" }] }), { status: 200 })) as typeof fetch;
+    try {
+      const result = await instance.refresh("models", "manual");
+      assert.match(String(result.models.error), /disk full/);
+      assert.equal(result.models.updated, false);
+      assert.deepEqual(result.snapshot.cpaModels.map((model) => model.id), ["cached"]);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -6,13 +6,13 @@ export interface CacheEnvelope<T> {
   data: T;
 }
 
-export async function readCache<T>(path: string): Promise<CacheEnvelope<T> | undefined> {
+export async function readCache<T>(path: string, parseData: (value: unknown) => T): Promise<CacheEnvelope<T> | undefined> {
   try {
     const parsed = JSON.parse(await readFile(path, "utf8"));
     if (!parsed || typeof parsed !== "object" || typeof parsed.fetchedAt !== "number" || !("data" in parsed)) {
       return undefined;
     }
-    return parsed as CacheEnvelope<T>;
+    return { fetchedAt: parsed.fetchedAt, data: parseData(parsed.data) };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     return undefined;
