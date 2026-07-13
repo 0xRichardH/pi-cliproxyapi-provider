@@ -9,8 +9,6 @@ test("uses environment API key placeholder when auth is required", () => {
     authRequired: true,
     authHeader: true,
     headers: { "User-Agent": "pi" },
-    cpaCacheTtlSeconds: 3600,
-    modelsDevCacheTtlSeconds: 86400,
     modelsDevEnabled: true,
     modelAliases: {},
   }, []);
@@ -28,8 +26,6 @@ test("uses nonempty placeholder API key for no-auth mode", () => {
     authRequired: false,
     authHeader: false,
     headers: {},
-    cpaCacheTtlSeconds: 3600,
-    modelsDevCacheTtlSeconds: 86400,
     modelsDevEnabled: true,
     modelAliases: {},
   }, []);
@@ -45,8 +41,6 @@ test("forces Authorization header off when auth is disabled", () => {
     authRequired: false,
     authHeader: true,
     headers: {},
-    cpaCacheTtlSeconds: 3600,
-    modelsDevCacheTtlSeconds: 86400,
     modelsDevEnabled: true,
     modelAliases: {},
   }, []);

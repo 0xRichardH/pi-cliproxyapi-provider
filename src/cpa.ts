@@ -22,7 +22,7 @@ export function parseCpaModelsResponse(payload: unknown): CpaModel[] {
     throw new Error("CPA /v1/models response must contain a data array");
   }
 
-  return response.data.flatMap((entry) => {
+  const models = response.data.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
     const record = entry as Record<string, unknown>;
     if (typeof record.id !== "string" || record.id.trim() === "") return [];
@@ -33,6 +33,10 @@ export function parseCpaModelsResponse(payload: unknown): CpaModel[] {
       created: typeof record.created === "number" ? record.created : undefined,
     }];
   });
+
+  const unique = new Map<string, CpaModel>();
+  for (const model of models) unique.set(model.id, model);
+  return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export async function fetchCpaModels(baseUrl: string, headers: Record<string, string> = {}, timeoutMs?: number): Promise<CpaModel[]> {

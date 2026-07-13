@@ -2,9 +2,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { DEFAULT_CONFIG, loadConfig } from "../src/config.ts";
-import { discoverModels } from "../src/discovery.ts";
-import { buildProviderModels, buildUnavailableProviderModels } from "../src/provider.ts";
+import { ProviderCatalog } from "../src/catalog.ts";
+import { ProviderRuntime } from "../src/runtime.ts";
 import { buildProviderRegistration } from "../src/registration.ts";
+import { buildUnavailableProviderModels } from "../src/provider.ts";
 import { registerCliproxyapiCommand } from "../src/commands.ts";
 import { getDiscoveryApiKey } from "../src/auth.ts";
 
@@ -13,17 +14,33 @@ const packageRoot = dirname(extensionDir);
 const bundledModelsDevPath = join(packageRoot, "data", "models-dev-fallback.json");
 
 export default async function (pi: ExtensionAPI) {
-  registerCliproxyapiCommand(pi, bundledModelsDevPath);
-
   let config = DEFAULT_CONFIG;
   try {
     config = loadConfig(process.cwd());
-    const discovery = await discoverModels({ config, bundledModelsDevPath, discoveryApiKey: await getDiscoveryApiKey(config.providerName) });
-    const built = buildProviderModels(discovery.cpaModels, discovery.modelsDevCatalog, config.modelAliases);
-    const registration = buildProviderRegistration(config, built.models);
-    pi.registerProvider(registration.providerName, registration.config);
+    const catalog = new ProviderCatalog({
+      config,
+      bundledModelsDevPath,
+      getApiKey: () => getDiscoveryApiKey(config.providerName),
+    });
+    const runtime = new ProviderRuntime({ pi, config, catalog });
+    registerCliproxyapiCommand(pi, runtime, catalog);
+    await runtime.start();
+
+    let backgroundRefreshStarted = false;
+    pi.on("session_start", (event, ctx) => {
+      if (event.reason !== "startup" || backgroundRefreshStarted) return;
+      backgroundRefreshStarted = true;
+      void runtime.refresh("models", "background").then((result) => {
+        if (result.models.error && ctx.hasUI) {
+          ctx.ui.setStatus("cliproxyapi", "CPA: cached models");
+        } else if (ctx.hasUI) {
+          ctx.ui.setStatus("cliproxyapi", undefined);
+        }
+      });
+    });
   } catch (error) {
+    registerCliproxyapiCommand(pi);
     pi.registerProvider(config.providerName, buildProviderRegistration(config, buildUnavailableProviderModels()).config);
-    console.warn(`[pi-cliproxyapi-provider] registered placeholder provider after discovery failure: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(`[pi-cliproxyapi-provider] registered placeholder provider after startup failure: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

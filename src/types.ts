@@ -6,8 +6,6 @@ export interface CpaProviderConfig {
   authRequired: boolean;
   authHeader: boolean;
   headers: Record<string, string>;
-  cpaCacheTtlSeconds: number;
-  modelsDevCacheTtlSeconds: number;
   modelsDevEnabled: boolean;
   modelAliases: Record<string, string>;
 }

@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 export interface CacheEnvelope<T> {
   fetchedAt: number;
@@ -20,36 +20,14 @@ export async function readCache<T>(path: string): Promise<CacheEnvelope<T> | und
 }
 
 export async function writeCache<T>(path: string, data: T, fetchedAt = Date.now()): Promise<void> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(path, `${JSON.stringify({ fetchedAt, data }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-}
-
-export function isFresh(cache: Pick<CacheEnvelope<unknown>, "fetchedAt"> | undefined, ttlSeconds: number, now = Date.now()): boolean {
-  if (!cache || ttlSeconds <= 0 || cache.fetchedAt > now) return false;
-  return now - cache.fetchedAt < ttlSeconds * 1000;
-}
-
-export async function getCachedOrFetch<T>(options: {
-  path: string;
-  ttlSeconds: number;
-  fetchFresh: () => Promise<T>;
-  now?: number;
-  force?: boolean;
-}): Promise<{ data: T; source: "fresh" | "cache" | "stale"; error?: unknown }> {
-  const cached = await readCache<T>(options.path);
-  const now = options.now ?? Date.now();
-  if (!options.force && isFresh(cached, options.ttlSeconds, now)) {
-    return { data: cached!.data, source: "cache" };
-  }
-
+  const directory = dirname(path);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const temporaryPath = join(directory, `.${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`);
   try {
-    const fresh = await options.fetchFresh();
-    await writeCache(options.path, fresh, now);
-    return { data: fresh, source: "fresh" };
-  } catch (error) {
-    if (cached) {
-      return { data: cached.data, source: "stale", error };
-    }
-    throw error;
+    await writeFile(temporaryPath, `${JSON.stringify({ fetchedAt, data }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } finally {
+    await rm(temporaryPath, { force: true });
   }
 }

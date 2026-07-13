@@ -30,8 +30,6 @@ test("uses safe default config", () => {
   assert.equal(config.baseUrl, DEFAULT_CONFIG.baseUrl);
   assert.equal(config.authRequired, true);
   assert.equal(config.authHeader, true);
-  assert.equal(config.cpaCacheTtlSeconds, 3600);
-  assert.equal(config.modelsDevCacheTtlSeconds, 86400);
 });
 
 test("normalizes authHeader off when authRequired is false", () => {
