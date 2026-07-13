@@ -11,8 +11,6 @@ export const DEFAULT_CONFIG: CpaProviderConfig = {
   authRequired: true,
   authHeader: true,
   headers: {},
-  cpaCacheTtlSeconds: 60 * 60,
-  modelsDevCacheTtlSeconds: 24 * 60 * 60,
   modelsDevEnabled: true,
   modelAliases: {},
 };
@@ -124,13 +122,6 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
   for (const field of booleanFields) {
     if (record[field] !== undefined && typeof record[field] !== "boolean") {
       throw new Error(`${field} must be a boolean in config file: ${path}`);
-    }
-  }
-
-  const ttlFields = ["cpaCacheTtlSeconds", "modelsDevCacheTtlSeconds"];
-  for (const field of ttlFields) {
-    if (record[field] !== undefined && (typeof record[field] !== "number" || !Number.isFinite(record[field]) || record[field] <= 0)) {
-      throw new Error(`${field} must be a positive number in config file: ${path}`);
     }
   }
 

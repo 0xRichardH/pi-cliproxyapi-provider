@@ -5,7 +5,14 @@
   "type": "module",
   "license": "MIT",
   "private": false,
-  "keywords": ["pi-package", "pi-extension", "pi", "cliproxyapi", "provider", "models.dev"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "cliproxyapi",
+    "provider",
+    "models.dev"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/0xRichardH/pi-cliproxyapi-provider.git"
@@ -14,17 +21,28 @@
     "url": "https://github.com/0xRichardH/pi-cliproxyapi-provider/issues"
   },
   "homepage": "https://github.com/0xRichardH/pi-cliproxyapi-provider#readme",
-  "files": ["src", "extensions", "data", "README.md", "LICENSE"],
+  "files": [
+    "src",
+    "extensions",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
   },
   "scripts": {
     "test": "node --test test/*.test.ts",
-    "test:unit": "node --test test/*.test.ts"
+    "test:unit": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "update:models-dev": "node scripts/update-models-dev-fallback.mjs"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-ai": "*"
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -35,7 +53,8 @@
     }
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "0.80.6",
     "@earendil-works/pi-coding-agent": "0.80.6",
-    "@earendil-works/pi-ai": "0.80.6"
+    "typescript": "^5.9.3"
   }
 }

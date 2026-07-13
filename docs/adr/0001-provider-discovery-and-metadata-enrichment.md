@@ -10,4 +10,4 @@ Accepted. The package discovers available models only from CLIProxyAPI's OpenAI-
 
 ## Consequences
 
-The package caches CPA model discovery for one hour and models.dev metadata for one day. Metadata aliases are metadata-only: the registered pi model keeps the original CLIProxyAPI model ID so requests still route through the proxy correctly.
+The package registers the last successful CPA model snapshot immediately, then attempts a short background discovery and dynamically updates the provider when availability changes. The models.dev metadata snapshot does not expire automatically; users refresh it explicitly, while a scheduled repository workflow keeps the bundled fallback catalog current and publishes changed catalogs as patch releases. Metadata aliases are metadata-only: the registered pi model keeps the original CLIProxyAPI model ID so requests still route through the proxy correctly.

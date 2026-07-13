@@ -1,6 +1,11 @@
 # Release guide
 
-GitHub Actions publishes this package to npm when you push a tag named `vX.Y.Z`. The tag version must match the version in `package.json`.
+GitHub Actions publishes this package in two ways:
+
+- A pushed `vX.Y.Z` tag triggers the normal release workflow.
+- The daily models.dev workflow publishes a patch release automatically when the bundled fallback catalog changes.
+
+In both cases, the published version must be unique on npm.
 
 ## Prerequisites
 
@@ -49,6 +54,17 @@ git tag v0.1.0
 ```
 
 Watch the **Publish to npm** workflow on the repository's **Actions** page. The workflow installs dependencies, runs tests, checks the tag against `package.json`, previews the package contents, and publishes to npm with provenance.
+
+## Automatic catalog releases
+
+Every day at 03:17 UTC, GitHub Actions downloads and validates the latest models.dev catalog. When the bundled fallback changes, the workflow:
+
+1. Runs the full checks.
+2. Bumps the patch version in `package.json` and `package-lock.json`.
+3. Commits and pushes the catalog and version change.
+4. Publishes the package to npm with provenance.
+
+No new version is created when the catalog is unchanged. If publication fails after the release commit was pushed, the next daily or manual run detects that the committed automatic-release version is absent from npm and retries it. The workflow requires `contents: write` permission and the `NPM_TOKEN` repository secret.
 
 ## Publish a later release
 

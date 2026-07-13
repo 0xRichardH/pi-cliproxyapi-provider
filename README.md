@@ -95,10 +95,12 @@ export CLIPROXYAPI_API_KEY=your-key
 ## Commands
 
 ```text
-/cliproxyapi config   # interactive setup
-/cliproxyapi status   # show config, cache ages, and enrichment counts
-/cliproxyapi refresh  # refresh caches, then run /reload
-/cliproxyapi aliases  # show unmatched model IDs for metadata aliases
+/cliproxyapi config             # interactive setup
+/cliproxyapi status             # show snapshots, capabilities, and enrichment counts
+/cliproxyapi refresh            # refresh models and metadata, then update pi immediately
+/cliproxyapi refresh models     # refresh CLIProxyAPI availability only
+/cliproxyapi refresh metadata   # refresh models.dev metadata only
+/cliproxyapi aliases            # show unmatched model IDs for metadata aliases
 ```
 
 ## Metadata aliases
@@ -127,20 +129,28 @@ Project config only reads `modelAliases`; other fields are ignored.
 }
 ```
 
-## Caches
+## Snapshots and startup
 
 ```text
-CPA /v1/models cache: 1 hour
-models.dev cache:    1 day
+CPA /v1/models:      local snapshot at startup, then a background refresh
+models.dev metadata: persistent local snapshot, refreshed manually
 ```
 
-Caches live under:
+Snapshots live under:
 
 ```text
 ~/.cache/pi-cliproxyapi-provider/
 ```
 
-Startup does not fetch `models.dev`. It uses a fresh local `models.dev` cache when present, otherwise it uses `data/models-dev-fallback.json`. Run `/cliproxyapi refresh` to update both the CPA model cache and the `models.dev` metadata cache.
+Startup registers the provider immediately from the last-known-good local snapshots. It then refreshes CLIProxyAPI availability in the background with a short timeout and updates the provider dynamically if the model list changed. On a first run, Pi registers a placeholder until background discovery succeeds. Startup never fetches `models.dev`; it uses the persistent local metadata snapshot or `data/models-dev-fallback.json` when no snapshot exists.
+
+Manual refreshes update the running provider immediately; `/reload` is not required. Failed refreshes retain the last-known-good data independently for each source.
+
+A scheduled GitHub Actions workflow checks the bundled fallback catalog daily. When it changes, the workflow validates the package, bumps the patch version, commits the update, and publishes the new version to npm. Maintainers can also update the catalog locally with:
+
+```bash
+npm run update:models-dev
+```
 
 ## Test
 
@@ -150,4 +160,4 @@ npm test
 
 ## Release
 
-Releases are published to npm when a matching `v*` tag is pushed. See [RELEASING.md](RELEASING.md) for npm authentication, first-release steps, versioning, verification, and troubleshooting.
+Releases are published to npm when a matching `v*` tag is pushed. Changed daily models.dev catalogs also produce automatic patch releases. See [RELEASING.md](RELEASING.md) for authentication, versioning, verification, and troubleshooting.

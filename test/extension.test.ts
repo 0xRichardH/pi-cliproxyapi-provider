@@ -17,6 +17,43 @@ async function withTempCwd<T>(fn: (cwd: string) => Promise<T>): Promise<T> {
   }
 }
 
+test("extension starts from snapshots and refreshes CPA models after session start", async () => {
+  const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-lifecycle-home-"));
+  const originalHome = process.env.HOME;
+  const originalFetch = globalThis.fetch;
+
+  try {
+    process.env.HOME = home;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      assert.equal(String(url), "http://localhost:8317/v1/models");
+      return new Response(JSON.stringify({ data: [{ id: "fresh-model" }] }), { status: 200 });
+    }) as typeof fetch;
+
+    await withTempCwd(async () => {
+      const providers: Array<{ name: string; config: any }> = [];
+      let sessionStart: ((event: any, ctx: any) => void) | undefined;
+      await extension({
+        registerCommand: () => {},
+        registerProvider: (name: string, config: any) => providers.push({ name, config }),
+        on: (event: string, handler: any) => { if (event === "session_start") sessionStart = handler; },
+      } as any);
+
+      assert.equal(providers[0].config.models[0].id, "login-required");
+      sessionStart?.({ reason: "startup" }, { hasUI: false, ui: { setStatus: () => {} } });
+      const deadline = Date.now() + 2_000;
+      while (providers.at(-1)?.config.models[0].id !== "fresh-model" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(providers.at(-1)?.config.models[0].id, "fresh-model");
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("extension registers placeholder provider when global config is invalid", async () => {
   const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-home-"));
   const originalHome = process.env.HOME;
@@ -32,6 +69,7 @@ test("extension registers placeholder provider when global config is invalid", a
       await extension({
         registerCommand: () => {},
         registerProvider: (name: string, config: any) => providers.push({ name, config }),
+        on: () => {},
       } as any);
 
       assert.equal(providers.length, 1);

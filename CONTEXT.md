@@ -32,10 +32,10 @@ _Avoid_: Rename, route alias
 An available model enriched with model metadata and passed to `pi.registerProvider()`. Its `id` remains the original CLIProxyAPI model ID.
 _Avoid_: models.dev model, alias model
 
-**CPA model cache**:
-The cached response from the model discovery endpoint. It has a one-hour default TTL.
+**CPA model snapshot**:
+The last successful response from the model discovery endpoint. Startup registers it immediately, then attempts a short background refresh and dynamically updates the provider when availability changes.
 _Avoid_: Provider cache, model metadata cache
 
-**model metadata cache**:
-The cached `models.dev/models.json` catalog. It has a one-day default TTL and falls back to a bundled snapshot.
+**model metadata snapshot**:
+The persisted `models.dev/models.json` catalog. It does not expire automatically and changes only through an explicit refresh. When no snapshot exists, startup uses the bundled snapshot.
 _Avoid_: CPA cache, discovery cache

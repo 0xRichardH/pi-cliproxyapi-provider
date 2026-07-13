@@ -17,8 +17,8 @@ test("parses /v1/models responses and keeps only model entries with IDs", () => 
     ]
   });
 
-  assert.deepEqual(models.map((model) => model.id), ["gpt-5.5", "claude-sonnet-4-6"]);
-  assert.equal(models[0].owned_by, "openai");
+  assert.deepEqual(models.map((model) => model.id), ["claude-sonnet-4-6", "gpt-5.5"]);
+  assert.equal(models.find((model) => model.id === "gpt-5.5")?.owned_by, "openai");
 });
 
 test("aborts CPA model discovery instead of waiting forever on a stuck network fetch", async () => {
