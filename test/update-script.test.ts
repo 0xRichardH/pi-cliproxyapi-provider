@@ -22,13 +22,24 @@ test("models.dev updater rejects catastrophic catalog shrinkage", () => {
   assert.throws(() => validateCatalogSize(filler(200), filler(50)), /shrank from 200 to 50/);
 });
 
-test("daily workflow is scheduled and conditionally publishes changed or pending releases", async () => {
+test("daily workflow bumps the version and dispatches the release workflow", async () => {
   const workflow = await readFile(".github/workflows/update-models-dev.yml", "utf8");
 
   assert.match(workflow, /cron: "17 3 \* \* \*"/);
+  assert.match(workflow, /actions: write/);
   assert.match(workflow, /npm version patch --no-git-tag-version/);
+  assert.match(workflow, /gh workflow run publish\.yml/);
+  assert.doesNotMatch(workflow, /npm publish/);
+});
+
+test("release workflow reacts to package version changes and creates all release artifacts", async () => {
+  const workflow = await readFile(".github/workflows/publish.yml", "utf8");
+
+  assert.match(workflow, /branches:\n\s+- master/);
+  assert.match(workflow, /paths:\n\s+- package\.json/);
+  assert.match(workflow, /git tag -a "\$TAG"/);
   assert.match(workflow, /npm publish --access public --provenance/);
-  assert.match(workflow, /Find unpublished automatic release/);
-  assert.match(workflow, /git log --all .*--grep=/);
-  assert.match(workflow, /steps\.pending\.outputs\.publish == 'true'/);
+  assert.match(workflow, /gh release create "\$TAG"/);
+  assert.match(workflow, /--generate-notes/);
+  assert.match(workflow, /npmjs\.com\/package\/pi-cliproxyapi-provider\/v\/\$\{VERSION\}/);
 });

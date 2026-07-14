@@ -1,9 +1,8 @@
 # Release guide
 
-GitHub Actions publishes this package in two ways:
+GitHub Actions publishes this package when the version in `package.json` changes on `master`. The release workflow validates the package, creates a matching `vX.Y.Z` tag, publishes to npm with provenance, and creates a GitHub Release with generated notes and a link to the npm package.
 
-- A pushed `vX.Y.Z` tag triggers the normal release workflow.
-- The daily models.dev workflow publishes a patch release automatically when the bundled fallback catalog changes.
+The daily models.dev workflow uses the same release path: when the bundled fallback catalog changes, it bumps the patch version, commits the update, and dispatches the release workflow.
 
 In both cases, the published version must be unique on npm.
 
@@ -39,32 +38,20 @@ The first release creates the npm package. If a granular token cannot create it,
 
 ## Publish the first release
 
-The initial package version is `0.1.0`. Push the release setup before creating its tag:
+Merge or push a commit to `master` that changes the version in `package.json` and `package-lock.json`. The **Release** workflow starts automatically. It installs dependencies, runs checks, previews the package contents, creates the version tag, publishes to npm with provenance, and creates the GitHub Release.
 
-```bash
-git push origin master
-git tag -s v0.1.0 -m "Release v0.1.0"
-git push origin v0.1.0
-```
-
-If you do not sign Git tags, omit `-s`:
-
-```bash
-git tag v0.1.0
-```
-
-Watch the **Publish to npm** workflow on the repository's **Actions** page. The workflow installs dependencies, runs tests, checks the tag against `package.json`, previews the package contents, and publishes to npm with provenance.
+You can also rerun a failed or incomplete release from **Actions → Release → Run workflow**. The workflow safely skips an npm version, tag, or GitHub Release that already exists, while verifying that an existing tag points to the release commit.
 
 ## Automatic catalog releases
 
 Every day at 03:17 UTC, GitHub Actions downloads and validates the latest models.dev catalog. When the bundled fallback changes, the workflow:
 
-1. Runs the full checks.
-2. Bumps the patch version in `package.json` and `package-lock.json`.
+1. Bumps the patch version in `package.json` and `package-lock.json`.
+2. Runs the full checks.
 3. Commits and pushes the catalog and version change.
-4. Publishes the package to npm with provenance.
+4. Dispatches the normal release workflow.
 
-No new version is created when the catalog is unchanged. If publication fails after the release commit was pushed, the next daily or manual run detects that the committed automatic-release version is absent from npm and retries it. The workflow requires `contents: write` permission and the `NPM_TOKEN` repository secret.
+No new version is created when the catalog is unchanged. The update workflow requires `contents: write` and `actions: write`; the release workflow requires `contents: write`, `id-token: write`, and the `NPM_TOKEN` repository secret.
 
 ## Publish a later release
 
@@ -74,17 +61,16 @@ Choose the semantic version increment:
 - `minor`: compatible features, such as `0.1.0` to `0.2.0`
 - `major`: breaking changes, such as `0.1.0` to `1.0.0`
 
-Create the version commit and tag:
+Create the version commit without a local tag:
 
 ```bash
-npm version patch --sign-git-tag-version
+npm version patch --no-git-tag-version
+git add package.json package-lock.json
+git commit -m "chore: release v$(node -p "require('./package.json').version")"
+git push origin master
 ```
 
-Replace `patch` with `minor` or `major` when appropriate. Then push the commit and tag:
-
-```bash
-git push origin master --follow-tags
-```
+Replace `patch` with `minor` or `major` when appropriate. The push triggers the release workflow, which creates and pushes the tag.
 
 ## Verify the release
 
@@ -104,9 +90,9 @@ The package should appear at <https://pi.dev/packages/pi-cliproxyapi-provider> a
 
 ## Troubleshooting
 
-### Tag and package versions differ
+### Tag points to another commit
 
-The workflow stops when, for example, tag `v0.1.1` points to a commit whose `package.json` still contains `0.1.0`. Create a new matching version and tag. Do not reuse a published npm version.
+The workflow stops if the matching version tag already points to a different commit. Do not move or reuse release tags. Increment the package version and push a new release commit instead.
 
 ### npm rejects authentication
 
