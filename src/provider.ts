@@ -1,5 +1,6 @@
 import type { CpaModel } from "./cpa.ts";
 import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
+import { getModelCapabilityOverrides } from "./model-capabilities.ts";
 import type { InputModality, ModelsDevCatalog, ModelsDevMetadata, ProviderModelConfigLike } from "./types.ts";
 
 export const PI_MODEL_DEFAULTS = {
@@ -38,10 +39,18 @@ function costFromMetadata(metadata: ModelsDevMetadata): ProviderModelConfigLike[
 }
 
 function modelFromMetadata(cpaModel: CpaModel, metadata: ModelsDevMetadata): ProviderModelConfigLike {
+  const capabilityOverrides = getModelCapabilityOverrides({
+    availableModelId: cpaModel.id,
+    metadataModelId: metadata.id,
+  });
+
   return {
     id: cpaModel.id,
     name: metadata.name ?? cpaModel.id,
-    reasoning: metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
+    reasoning: capabilityOverrides.reasoning ?? metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
+    ...(capabilityOverrides.thinkingLevelMap
+      ? { thinkingLevelMap: capabilityOverrides.thinkingLevelMap }
+      : {}),
     input: inputFromMetadata(metadata),
     cost: costFromMetadata(metadata),
     contextWindow: metadata.limit?.context ?? PI_MODEL_DEFAULTS.contextWindow,
@@ -58,10 +67,13 @@ function cloneModelDefaults(): typeof PI_MODEL_DEFAULTS {
 }
 
 function defaultModel(cpaModel: CpaModel): ProviderModelConfigLike {
+  const capabilityOverrides = getModelCapabilityOverrides({ availableModelId: cpaModel.id });
+
   return {
     id: cpaModel.id,
     name: cpaModel.id,
     ...cloneModelDefaults(),
+    ...capabilityOverrides,
   };
 }
 

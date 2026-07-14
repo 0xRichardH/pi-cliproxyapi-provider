@@ -62,3 +62,50 @@ test("does not share mutable default objects between fallback models", () => {
   assert.deepEqual(result.models[1].input, ["text"]);
   assert.equal(result.models[1].cost.input, 0);
 });
+
+test("adds the full thinking map to every GPT-5.6 model family member", () => {
+  const expectedThinkingLevelMap = {
+    off: "none",
+    minimal: "minimal",
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: "xhigh",
+    max: "max",
+  };
+  const result = buildProviderModels([
+    { id: "gpt-5.6-luna" },
+    { id: "0xdev/gpt-5.6-sol" },
+    { id: "gpt-5.6-terra" },
+  ], catalog, {});
+
+  for (const model of result.models) {
+    assert.equal(model.reasoning, true);
+    assert.deepEqual(model.thinkingLevelMap, expectedThinkingLevelMap);
+  }
+});
+
+test("recognizes GPT-5.6 through a canonical metadata alias", () => {
+  const result = buildProviderModels(
+    [{ id: "custom-luna" }],
+    {
+      "openai/gpt-5.6-luna": {
+        id: "openai/gpt-5.6-luna",
+        name: "GPT-5.6 Luna",
+        reasoning: true,
+      },
+    },
+    { "custom-luna": "openai/gpt-5.6-luna" },
+  );
+
+  assert.equal(result.models[0].reasoning, true);
+  assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+});
+
+test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
+  const result = buildProviderModels([{ id: "0xdev/gpt-5.6-luna" }], {}, {});
+
+  assert.equal(result.models[0].reasoning, true);
+  assert.equal(result.models[0].thinkingLevelMap?.off, "none");
+  assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+});

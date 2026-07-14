@@ -1,3 +1,5 @@
+import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
+
 export type InputModality = "text" | "image";
 
 export interface CpaProviderConfig {
@@ -36,6 +38,7 @@ export interface ProviderModelConfigLike {
   id: string;
   name: string;
   reasoning: boolean;
+  thinkingLevelMap?: ThinkingLevelMap;
   input: InputModality[];
   cost: {
     input: number;
