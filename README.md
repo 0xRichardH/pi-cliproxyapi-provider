@@ -146,7 +146,7 @@ Startup registers the provider immediately from the last-known-good local snapsh
 
 Manual refreshes update the running provider immediately; `/reload` is not required. Failed refreshes retain the last-known-good data independently for each source.
 
-A scheduled GitHub Actions workflow checks the bundled fallback catalog daily. When it changes, the workflow validates the package, bumps the patch version, commits the update, and publishes the new version to npm. Maintainers can also update the catalog locally with:
+A scheduled GitHub Actions workflow checks the bundled fallback catalog daily. When it changes, the workflow validates the package, bumps the patch version, commits the update, and starts the normal release workflow. Maintainers can also update the catalog locally with:
 
 ```bash
 npm run update:models-dev
@@ -160,4 +160,4 @@ npm test
 
 ## Release
 
-Releases are published to npm when a matching `v*` tag is pushed. Changed daily models.dev catalogs also produce automatic patch releases. See [RELEASING.md](RELEASING.md) for authentication, versioning, verification, and troubleshooting.
+Changing the `package.json` version on `master` automatically creates a matching Git tag and GitHub Release, generates release notes, and publishes the package to npm. Changed daily models.dev catalogs also produce automatic patch releases through the same workflow. See [RELEASING.md](RELEASING.md) for authentication, versioning, verification, and troubleshooting.

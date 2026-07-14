@@ -1,4 +1,4 @@
-name: Update models.dev and publish
+name: Update models.dev
 
 on:
   schedule:
@@ -6,15 +6,11 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
-  id-token: write
-
-concurrency:
-  group: pi-cliproxyapi-provider-npm-publish
-  cancel-in-progress: false
 
 jobs:
-  update-and-publish:
+  update:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,59 +23,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Find unpublished automatic release
-        id: pending
-        shell: bash
-        run: |
-          publish=false
-          release_sha=""
-          version=""
-
-          while read -r sha; do
-            candidate="$(git show "${sha}:package.json" | node --input-type=module -e "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => process.stdout.write(JSON.parse(input).version));")"
-            published="$(npm view "pi-cliproxyapi-provider@${candidate}" version 2>/dev/null || true)"
-            if [[ -z "$published" ]]; then
-              publish=true
-              release_sha="$sha"
-              version="$candidate"
-              break
-            fi
-          done < <(git log --all --format=%H --grep='^chore: update models.dev fallback (v[0-9].*)$' --reverse)
-
-          echo "publish=$publish" >> "$GITHUB_OUTPUT"
-          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check out pending release
-        if: steps.pending.outputs.publish == 'true'
-        run: git checkout --detach "${{ steps.pending.outputs.release_sha }}"
-
-      - name: Install pending release dependencies
-        if: steps.pending.outputs.publish == 'true'
-        run: npm ci
-
-      - name: Verify pending release
-        if: steps.pending.outputs.publish == 'true'
-        run: npm run check && npm pack --dry-run
-
-      - name: Publish pending release
-        if: steps.pending.outputs.publish == 'true'
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Update fallback catalog
-        if: steps.pending.outputs.publish != 'true'
         run: npm run update:models-dev
 
       - name: Detect catalog changes
-        if: steps.pending.outputs.publish != 'true'
         id: changes
         shell: bash
         run: |
@@ -101,7 +53,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: npm pack --dry-run
 
-      - name: Commit and push release
+      - name: Commit and push update
         if: steps.changes.outputs.changed == 'true'
         id: release
         shell: bash
@@ -115,19 +67,20 @@ jobs:
           git push origin HEAD:${GITHUB_REF_NAME}
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Publish new release
+      # Pushes made with GITHUB_TOKEN do not start push workflows, so dispatch
+      # the release workflow explicitly after the automated version bump.
+      - name: Start release workflow
         if: steps.changes.outputs.changed == 'true'
-        run: npm publish --access public --provenance
+        shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish.yml --ref "${GITHUB_REF_NAME}"
 
       - name: Summary
         shell: bash
         run: |
-          if [[ "${{ steps.pending.outputs.publish }}" == "true" ]]; then
-            echo "Published pending pi-cliproxyapi-provider@${{ steps.pending.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          elif [[ "${{ steps.changes.outputs.changed }}" == "true" ]]; then
-            echo "Published pi-cliproxyapi-provider@${{ steps.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ steps.changes.outputs.changed }}" == "true" ]]; then
+            echo "Updated the fallback catalog and requested release v${{ steps.release.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "models.dev fallback and npm are already current." >> "$GITHUB_STEP_SUMMARY"
+            echo "models.dev fallback is already current." >> "$GITHUB_STEP_SUMMARY"
           fi
