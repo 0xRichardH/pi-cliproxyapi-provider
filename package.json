@@ -1,6 +1,6 @@
 {
   "name": "pi-cliproxyapi-provider",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Pi provider package for CLIProxyAPI with automatic model discovery and models.dev enrichment.",
   "type": "module",
   "license": "MIT",
