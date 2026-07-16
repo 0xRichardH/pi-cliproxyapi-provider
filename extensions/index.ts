@@ -27,16 +27,11 @@ export default async function (pi: ExtensionAPI) {
     await runtime.start();
 
     let backgroundRefreshStarted = false;
-    pi.on("session_start", (event, ctx) => {
+    pi.on("session_start", (event) => {
       if (event.reason !== "startup" || backgroundRefreshStarted) return;
       backgroundRefreshStarted = true;
-      void runtime.refresh("models", "background").then((result) => {
-        if (result.models.error && ctx.hasUI) {
-          ctx.ui.setStatus("cliproxyapi", "CPA: cached models");
-        } else if (ctx.hasUI) {
-          ctx.ui.setStatus("cliproxyapi", undefined);
-        }
-      });
+      // Cached models are the normal startup path; refresh quietly in the background.
+      void runtime.refresh("models", "background");
     });
   } catch (error) {
     registerCliproxyapiCommand(pi);
