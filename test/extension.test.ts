@@ -39,7 +39,7 @@ test("extension starts from snapshots and refreshes CPA models after session sta
       } as any);
 
       assert.equal(providers[0].config.models[0].id, "login-required");
-      sessionStart?.({ reason: "startup" }, { hasUI: false, ui: { setStatus: () => {} } });
+      sessionStart?.({ reason: "startup" });
       const deadline = Date.now() + 2_000;
       while (providers.at(-1)?.config.models[0].id !== "fresh-model" && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 20));
