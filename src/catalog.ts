@@ -75,15 +75,19 @@ export class ProviderCatalog {
     return this.setSnapshot(cpaCache?.data ?? [], cpaCache?.fetchedAt, metadataSnapshot.data, metadataSnapshot.fetchedAt, metadataSnapshot.source);
   }
 
-  async refresh(target: RefreshTarget = "all", mode: "background" | "manual" = "manual"): Promise<CatalogRefreshResult> {
+  async refresh(
+    target: RefreshTarget = "all",
+    mode: "background" | "manual" = "manual",
+    getDiscoveryApiKey?: () => Promise<string | undefined>,
+  ): Promise<CatalogRefreshResult> {
     if (this.activeRefresh) {
-      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode) return this.activeRefresh;
+      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode && getDiscoveryApiKey === undefined) return this.activeRefresh;
       await this.activeRefresh;
     }
 
     this.activeRefreshTarget = target;
     this.activeRefreshMode = mode;
-    this.activeRefresh = this.performRefresh(target, mode).finally(() => {
+    this.activeRefresh = this.performRefresh(target, mode, getDiscoveryApiKey).finally(() => {
       this.activeRefresh = undefined;
       this.activeRefreshTarget = undefined;
       this.activeRefreshMode = undefined;
@@ -95,7 +99,11 @@ export class ProviderCatalog {
     return this.snapshot;
   }
 
-  private async performRefresh(target: RefreshTarget, mode: "background" | "manual"): Promise<CatalogRefreshResult> {
+  private async performRefresh(
+    target: RefreshTarget,
+    mode: "background" | "manual",
+    getDiscoveryApiKey?: () => Promise<string | undefined>,
+  ): Promise<CatalogRefreshResult> {
     const current = this.snapshot ?? await this.load();
     let cpaModels = current.cpaModels;
     let cpaUpdatedAt = current.cpaUpdatedAt;
@@ -108,7 +116,7 @@ export class ProviderCatalog {
 
     if (models.attempted) {
       try {
-        const apiKey = await this.options.getApiKey();
+        const apiKey = await (getDiscoveryApiKey ?? this.options.getApiKey)();
         const fresh = await fetchCpaModels(
           this.options.config.baseUrl,
           discoveryHeaders(this.options.config, apiKey),
