@@ -54,6 +54,57 @@ test("extension starts from snapshots and refreshes CPA models after session sta
   }
 });
 
+test("manual refresh uses the active model registry credential", async () => {
+  const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-refresh-home-"));
+  const originalHome = process.env.HOME;
+  const originalFetch = globalThis.fetch;
+
+  try {
+    process.env.HOME = home;
+    await withTempCwd(async (cwd) => {
+      let commandHandler: ((args: string, ctx: any) => Promise<void>) | undefined;
+      let receivedAuthorization: string | null = null;
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        receivedAuthorization = headers.get("Authorization");
+        if (receivedAuthorization !== "Bearer runtime-key") {
+          return new Response("unauthorized", { status: 401, statusText: "Unauthorized" });
+        }
+        return new Response(JSON.stringify({ data: [{ id: "fresh-model" }] }), { status: 200 });
+      }) as typeof fetch;
+
+      await extension({
+        registerCommand: (_name: string, options: any) => { commandHandler = options.handler; },
+        registerProvider: () => {},
+        on: () => {},
+      } as any);
+
+      const notifications: Array<{ message: string; level: string }> = [];
+      await commandHandler?.("refresh models", {
+        cwd,
+        modelRegistry: {
+          getApiKeyForProvider: async (providerName: string) => {
+            assert.equal(providerName, "cpa");
+            return "runtime-key";
+          },
+        },
+        ui: {
+          notify: (message: string, level: string) => notifications.push({ message, level }),
+        },
+      });
+
+      assert.equal(receivedAuthorization, "Bearer runtime-key");
+      assert.equal(notifications.at(-1)?.level, "info");
+      assert.doesNotMatch(notifications.at(-1)?.message ?? "", /401 Unauthorized/);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("extension registers placeholder provider when global config is invalid", async () => {
   const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-home-"));
   const originalHome = process.env.HOME;

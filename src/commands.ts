@@ -147,7 +147,10 @@ export function registerCliproxyapiCommand(pi: ExtensionAPI, runtime?: ProviderR
           ctx.ui.notify("Usage: /cliproxyapi refresh [models|metadata]", "warning");
           return;
         }
-        const result = await runtime.refresh(target, "manual");
+        const getDiscoveryApiKey = target === "metadata"
+          ? undefined
+          : () => ctx.modelRegistry.getApiKeyForProvider(config.providerName);
+        const result = await runtime.refresh(target, "manual", getDiscoveryApiKey);
         const level = result.models.error || result.metadata.error ? "warning" : "info";
         ctx.ui.notify([
           "CLIProxyAPI provider refresh complete.",

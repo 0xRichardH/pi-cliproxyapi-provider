@@ -24,8 +24,12 @@ export class ProviderRuntime {
     return snapshot;
   }
 
-  async refresh(target: RefreshTarget = "all", mode: "background" | "manual" = "manual"): Promise<CatalogRefreshResult> {
-    const result = await this.options.catalog.refresh(target, mode);
+  async refresh(
+    target: RefreshTarget = "all",
+    mode: "background" | "manual" = "manual",
+    getDiscoveryApiKey?: () => Promise<string | undefined>,
+  ): Promise<CatalogRefreshResult> {
+    const result = await this.options.catalog.refresh(target, mode, getDiscoveryApiKey);
     if (result.models.updated || result.metadata.updated) this.register(result.snapshot, false);
     return result;
   }
