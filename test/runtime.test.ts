@@ -51,8 +51,9 @@ test("runtime registers cached models immediately and refreshes without reload",
 test("runtime refreshModels invokes catalog refresh with network when allowNetwork is true", async () => {
   const catalog = {
     load: async () => snapshot("cached"),
-    refresh: async (_target: string, mode: string, _getApiKey: any, _signal: any) => {
+    refresh: async (_target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
       assert.equal(mode, "background");
+      if (signal?.aborted) throw signal.reason;
       return {
         snapshot: snapshot("network-fresh"),
         models: { attempted: true, updated: true, changed: true },
@@ -71,4 +72,34 @@ test("runtime refreshModels invokes catalog refresh with network when allowNetwo
 
   const freshModels = await runtime.refreshModels({ allowNetwork: true } as any);
   assert.equal(freshModels[0].id, "network-fresh");
+});
+
+test("runtime refreshModels maps context.force to manual mode and passes signal", async () => {
+  let receivedMode: string | undefined;
+  let receivedSignal: AbortSignal | undefined;
+
+  const catalog = {
+    load: async () => snapshot("cached"),
+    refresh: async (_target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
+      receivedMode = mode;
+      receivedSignal = signal;
+      return {
+        snapshot: snapshot("manual-fresh"),
+        models: { attempted: true, updated: true, changed: true },
+        metadata: { attempted: false, updated: false, changed: false },
+      };
+    },
+  };
+  const runtime = new ProviderRuntime({
+    pi: { registerProvider: () => {} } as any,
+    config,
+    catalog: catalog as any,
+  });
+
+  const controller = new AbortController();
+  const models = await runtime.refreshModels({ allowNetwork: true, force: true, signal: controller.signal } as any);
+
+  assert.equal(receivedMode, "manual");
+  assert.equal(receivedSignal, controller.signal);
+  assert.equal(models[0].id, "manual-fresh");
 });

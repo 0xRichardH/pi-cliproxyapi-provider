@@ -82,7 +82,16 @@ export class ProviderCatalog {
     signal?: AbortSignal,
   ): Promise<CatalogRefreshResult> {
     if (this.activeRefresh) {
-      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode && getDiscoveryApiKey === undefined) return this.activeRefresh;
+      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode && getDiscoveryApiKey === undefined) {
+        if (!signal) return this.activeRefresh;
+        if (signal.aborted) throw signal.reason ?? new Error("Refresh aborted");
+        return Promise.race([
+          this.activeRefresh,
+          new Promise<never>((_, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason ?? new Error("Refresh aborted")), { once: true });
+          }),
+        ]);
+      }
       await this.activeRefresh;
     }
 

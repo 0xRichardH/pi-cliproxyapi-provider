@@ -1,5 +1,6 @@
 import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import { getDiscoveryApiKey } from "./auth.ts";
 import { ProviderCatalog, type CatalogRefreshResult, type CatalogSnapshot, type RefreshTarget } from "./catalog.ts";
 import { buildUnavailableProviderModels } from "./provider.ts";
 import { buildProviderRegistration } from "./registration.ts";
@@ -41,7 +42,8 @@ export class ProviderRuntime {
       return (snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
     }
     const mode = context.force ? "manual" : "background";
-    const result = await this.options.catalog.refresh("all", mode, undefined, context.signal);
+    const keyFn = () => getDiscoveryApiKey(this.options.config.providerName);
+    const result = await this.options.catalog.refresh("all", mode, keyFn, context.signal);
     const models = (result.snapshot.built.models.length > 0 ? result.snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
     this.register(result.snapshot, false);
     return models;

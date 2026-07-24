@@ -31,6 +31,9 @@ export async function withNetworkTimeout<T>(
   try {
     return await Promise.race([operationPromise, timeoutPromise]);
   } catch (error) {
+    if (parentSignal?.aborted) {
+      throw parentSignal.reason ?? error;
+    }
     if (controller.signal.aborted && controller.signal.reason instanceof Error) {
       throw controller.signal.reason;
     }
