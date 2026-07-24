@@ -48,10 +48,11 @@ test("runtime registers cached models immediately and refreshes without reload",
   assert.equal(registrations[1].provider.models[0].reasoning, true);
 });
 
-test("runtime refreshModels invokes catalog refresh with network when allowNetwork is true", async () => {
+test("runtime refreshModels invokes a models-only catalog refresh with network when allowNetwork is true", async () => {
   const catalog = {
     load: async () => snapshot("cached"),
-    refresh: async (_target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
+    refresh: async (target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
+      assert.equal(target, "models");
       assert.equal(mode, "background");
       if (signal?.aborted) throw signal.reason;
       return {
@@ -102,4 +103,31 @@ test("runtime refreshModels maps context.force to manual mode and passes signal"
   assert.equal(receivedMode, "manual");
   assert.equal(receivedSignal, controller.signal);
   assert.equal(models[0].id, "manual-fresh");
+});
+
+test("runtime refreshModels uses Pi's effective API-key credential", async () => {
+  let receivedApiKey: string | undefined;
+  const catalog = {
+    load: async () => snapshot("cached"),
+    refresh: async (_target: string, _mode: string, getApiKey: () => Promise<string | undefined>) => {
+      receivedApiKey = await getApiKey();
+      return {
+        snapshot: snapshot("credential-fresh"),
+        models: { attempted: true, updated: true, changed: true },
+        metadata: { attempted: false, updated: false, changed: false },
+      };
+    },
+  };
+  const runtime = new ProviderRuntime({
+    pi: { registerProvider: () => {} } as any,
+    config,
+    catalog: catalog as any,
+  });
+
+  await runtime.refreshModels({
+    allowNetwork: true,
+    credential: { type: "api_key", key: "runtime-key" },
+  } as any);
+
+  assert.equal(receivedApiKey, "runtime-key");
 });

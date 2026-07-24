@@ -42,8 +42,11 @@ export class ProviderRuntime {
       return (snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
     }
     const mode = context.force ? "manual" : "background";
-    const keyFn = () => getDiscoveryApiKey(this.options.config.providerName);
-    const result = await this.options.catalog.refresh("all", mode, keyFn, context.signal);
+    const credential = context.credential;
+    const keyFn: () => Promise<string | undefined> = credential?.type === "api_key"
+      ? async () => credential.key
+      : () => getDiscoveryApiKey(this.options.config.providerName);
+    const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
     const models = (result.snapshot.built.models.length > 0 ? result.snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
     this.register(result.snapshot, false);
     return models;

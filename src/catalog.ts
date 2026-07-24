@@ -63,6 +63,8 @@ export class ProviderCatalog {
   private activeRefresh?: Promise<CatalogRefreshResult>;
   private activeRefreshTarget?: RefreshTarget;
   private activeRefreshMode?: "background" | "manual";
+  private activeRefreshController?: AbortController;
+  private readonly activeRefreshWaiters = new Set<symbol>();
   private readonly options: ProviderCatalogOptions;
 
   constructor(options: ProviderCatalogOptions) {
@@ -82,31 +84,57 @@ export class ProviderCatalog {
     signal?: AbortSignal,
   ): Promise<CatalogRefreshResult> {
     if (this.activeRefresh) {
-      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode && getDiscoveryApiKey === undefined) {
-        if (!signal) return this.activeRefresh;
-        if (signal.aborted) throw signal.reason ?? new Error("Refresh aborted");
-        return Promise.race([
-          this.activeRefresh,
-          new Promise<never>((_, reject) => {
-            signal.addEventListener("abort", () => reject(signal.reason ?? new Error("Refresh aborted")), { once: true });
-          }),
-        ]);
+      if (this.activeRefreshTarget === target && this.activeRefreshMode === mode) {
+        return this.waitForActiveRefresh(signal);
       }
       await this.activeRefresh;
     }
 
+    const controller = new AbortController();
     this.activeRefreshTarget = target;
     this.activeRefreshMode = mode;
-    this.activeRefresh = this.performRefresh(target, mode, getDiscoveryApiKey, signal).finally(() => {
+    this.activeRefreshController = controller;
+    this.activeRefresh = this.performRefresh(target, mode, getDiscoveryApiKey, controller.signal).finally(() => {
       this.activeRefresh = undefined;
       this.activeRefreshTarget = undefined;
       this.activeRefreshMode = undefined;
+      this.activeRefreshController = undefined;
+      this.activeRefreshWaiters.clear();
     });
-    return this.activeRefresh;
+    return this.waitForActiveRefresh(signal);
   }
 
   current(): CatalogSnapshot | undefined {
     return this.snapshot;
+  }
+
+  private async waitForActiveRefresh(signal?: AbortSignal): Promise<CatalogRefreshResult> {
+    const refresh = this.activeRefresh;
+    if (!refresh) throw new Error("No active refresh");
+    if (signal?.aborted) throw signal.reason ?? new Error("Refresh aborted");
+
+    const waiter = Symbol("refresh-waiter");
+    this.activeRefreshWaiters.add(waiter);
+    let onAbort: (() => void) | undefined;
+    const aborted = signal
+      ? new Promise<never>((_resolve, reject) => {
+        onAbort = () => {
+          this.activeRefreshWaiters.delete(waiter);
+          if (this.activeRefreshWaiters.size === 0) {
+            this.activeRefreshController?.abort(signal.reason ?? new Error("Refresh aborted"));
+          }
+          reject(signal.reason ?? new Error("Refresh aborted"));
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+      })
+      : undefined;
+
+    try {
+      return await (aborted ? Promise.race([refresh, aborted]) : refresh);
+    } finally {
+      this.activeRefreshWaiters.delete(waiter);
+      if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+    }
   }
 
   private async performRefresh(
@@ -145,6 +173,7 @@ export class ProviderCatalog {
         models.changed = changed;
         models.updated = true;
       } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error;
         models.error = error;
       }
     }
@@ -161,6 +190,7 @@ export class ProviderCatalog {
         metadataResult.changed = changed;
         metadataResult.updated = true;
       } catch (error) {
+        if (signal?.aborted) throw signal.reason ?? error;
         metadataResult.error = error;
       }
     }
