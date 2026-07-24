@@ -158,8 +158,67 @@ test("refresh deduplicates concurrent requests", async () => {
       return new Response(JSON.stringify({ data: [{ id: "fresh" }] }), { status: 200 });
     }) as typeof fetch;
     try {
-      await Promise.all([instance.refresh("models", "background"), instance.refresh("models", "background")]);
+      const keyFn = async () => "runtime-key";
+      await Promise.all([
+        instance.refresh("models", "background", keyFn, new AbortController().signal),
+        instance.refresh("models", "background", keyFn, new AbortController().signal),
+      ]);
       assert.equal(fetches, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("deduplicated callers can abort without cancelling the shared refresh", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const instance = catalog(fallback);
+    await instance.load();
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return new Response(JSON.stringify({ data: [{ id: "fresh" }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const firstController = new AbortController();
+      const secondController = new AbortController();
+      const reason = new Error("second caller cancelled");
+      const keyFn = async () => "runtime-key";
+      const first = instance.refresh("models", "background", keyFn, firstController.signal);
+      const second = instance.refresh("models", "background", keyFn, secondController.signal);
+      secondController.abort(reason);
+
+      await assert.rejects(second, (error) => error === reason);
+      const result = await first;
+      assert.equal(result.models.updated, true);
+      assert.equal(fetches, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("refresh propagates the initiating caller's cancellation reason", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const instance = catalog(fallback);
+    await instance.load();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason;
+      await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+      throw new Error("unreachable");
+    }) as typeof fetch;
+    try {
+      const controller = new AbortController();
+      const reason = new Error("caller cancelled");
+      const refresh = instance.refresh("models", "manual", async () => undefined, controller.signal);
+      controller.abort(reason);
+
+      await assert.rejects(refresh, (error) => error === reason);
     } finally {
       globalThis.fetch = originalFetch;
     }

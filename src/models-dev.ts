@@ -38,14 +38,14 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
   return catalog;
 }
 
-export async function fetchModelsDevCatalog(timeoutMs?: number): Promise<ModelsDevCatalog> {
-  return withNetworkTimeout(async (signal) => {
-    const response = await fetch(MODELS_DEV_URL, { headers: { Accept: "application/json" }, signal });
+export async function fetchModelsDevCatalog(timeoutMs?: number, signal?: AbortSignal): Promise<ModelsDevCatalog> {
+  return withNetworkTimeout(async (reqSignal) => {
+    const response = await fetch(MODELS_DEV_URL, { headers: { Accept: "application/json" }, signal: reqSignal });
     if (!response.ok) {
       throw new Error(`models.dev fetch failed: HTTP ${response.status} ${response.statusText}`);
     }
     return parseModelsDevCatalog(await response.json());
-  }, timeoutMs, "models.dev fetch");
+  }, timeoutMs, "models.dev fetch", signal);
 }
 
 export async function readBundledModelsDevFallback(path: string): Promise<ModelsDevCatalog> {

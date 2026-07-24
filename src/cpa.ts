@@ -49,15 +49,20 @@ export function parseCpaModelsResponse(payload: unknown): CpaModel[] {
   return parseCpaModelEntries(response.data);
 }
 
-export async function fetchCpaModels(baseUrl: string, headers: Record<string, string> = {}, timeoutMs?: number): Promise<CpaModel[]> {
-  return withNetworkTimeout(async (signal) => {
+export async function fetchCpaModels(
+  baseUrl: string,
+  headers: Record<string, string> = {},
+  timeoutMs?: number,
+  signal?: AbortSignal,
+): Promise<CpaModel[]> {
+  return withNetworkTimeout(async (reqSignal) => {
     const response = await fetch(modelsEndpoint(baseUrl), {
       headers: { Accept: "application/json", ...headers },
-      signal,
+      signal: reqSignal,
     });
     if (!response.ok) {
       throw new Error(`CPA model discovery failed: HTTP ${response.status} ${response.statusText}`);
     }
     return parseCpaModelsResponse(await response.json());
-  }, timeoutMs, "CPA model discovery");
+  }, timeoutMs, "CPA model discovery", signal);
 }

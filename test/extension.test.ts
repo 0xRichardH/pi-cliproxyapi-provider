@@ -17,7 +17,7 @@ async function withTempCwd<T>(fn: (cwd: string) => Promise<T>): Promise<T> {
   }
 }
 
-test("extension starts from snapshots and refreshes CPA models after session start", async () => {
+test("extension registers provider with refreshModels capability", async () => {
   const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-lifecycle-home-"));
   const originalHome = process.env.HOME;
   const originalFetch = globalThis.fetch;
@@ -31,19 +31,17 @@ test("extension starts from snapshots and refreshes CPA models after session sta
 
     await withTempCwd(async () => {
       const providers: Array<{ name: string; config: any }> = [];
-      let sessionStart: ((event: any, ctx: any) => void) | undefined;
       await extension({
         registerCommand: () => {},
         registerProvider: (name: string, config: any) => providers.push({ name, config }),
-        on: (event: string, handler: any) => { if (event === "session_start") sessionStart = handler; },
+        on: () => {},
       } as any);
 
       assert.equal(providers[0].config.models[0].id, "login-required");
-      sessionStart?.({ reason: "startup" });
-      const deadline = Date.now() + 2_000;
-      while (providers.at(-1)?.config.models[0].id !== "fresh-model" && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
+      assert.equal(typeof providers[0].config.refreshModels, "function");
+
+      const refreshed = await providers[0].config.refreshModels({ allowNetwork: true });
+      assert.equal(refreshed[0].id, "fresh-model");
       assert.equal(providers.at(-1)?.config.models[0].id, "fresh-model");
     });
   } finally {

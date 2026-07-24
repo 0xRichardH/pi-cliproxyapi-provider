@@ -1,4 +1,5 @@
-import type { ProviderConfig } from "@earendil-works/pi-coding-agent";
+import type { RefreshModelsContext } from "@earendil-works/pi-ai";
+import type { ProviderConfig, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { CpaProviderConfig } from "./types.ts";
 import type { ProviderModelConfigLike } from "./types.ts";
 
@@ -10,6 +11,7 @@ export interface ProviderRegistration {
 export function buildProviderRegistration(
   config: CpaProviderConfig,
   models: ProviderModelConfigLike[],
+  refreshModels?: (context: RefreshModelsContext) => Promise<ProviderModelConfig[]>,
 ): ProviderRegistration {
   return {
     providerName: config.providerName,
@@ -20,7 +22,8 @@ export function buildProviderRegistration(
       apiKey: config.authRequired ? "$CLIPROXYAPI_API_KEY" : "cliproxyapi-no-auth",
       authHeader: config.authRequired && config.authHeader,
       headers: Object.keys(config.headers).length > 0 ? config.headers : undefined,
-      models,
+      models: models as ProviderModelConfig[],
+      refreshModels,
     },
   };
 }
