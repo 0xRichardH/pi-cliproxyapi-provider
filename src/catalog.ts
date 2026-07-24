@@ -79,6 +79,7 @@ export class ProviderCatalog {
     target: RefreshTarget = "all",
     mode: "background" | "manual" = "manual",
     getDiscoveryApiKey?: () => Promise<string | undefined>,
+    signal?: AbortSignal,
   ): Promise<CatalogRefreshResult> {
     if (this.activeRefresh) {
       if (this.activeRefreshTarget === target && this.activeRefreshMode === mode && getDiscoveryApiKey === undefined) return this.activeRefresh;
@@ -87,7 +88,7 @@ export class ProviderCatalog {
 
     this.activeRefreshTarget = target;
     this.activeRefreshMode = mode;
-    this.activeRefresh = this.performRefresh(target, mode, getDiscoveryApiKey).finally(() => {
+    this.activeRefresh = this.performRefresh(target, mode, getDiscoveryApiKey, signal).finally(() => {
       this.activeRefresh = undefined;
       this.activeRefreshTarget = undefined;
       this.activeRefreshMode = undefined;
@@ -103,6 +104,7 @@ export class ProviderCatalog {
     target: RefreshTarget,
     mode: "background" | "manual",
     getDiscoveryApiKey?: () => Promise<string | undefined>,
+    signal?: AbortSignal,
   ): Promise<CatalogRefreshResult> {
     const current = this.snapshot ?? await this.load();
     let cpaModels = current.cpaModels;
@@ -121,6 +123,7 @@ export class ProviderCatalog {
           this.options.config.baseUrl,
           discoveryHeaders(this.options.config, apiKey),
           mode === "background" ? this.options.backgroundTimeoutMs ?? 2_000 : this.options.manualTimeoutMs ?? 10_000,
+          signal,
         );
         if (mode === "background" && current.cpaModels.length > 0 && fresh.length === 0) {
           throw new Error("CPA automatic discovery returned no models; retained the last successful snapshot");
@@ -139,7 +142,7 @@ export class ProviderCatalog {
 
     if (metadataResult.attempted) {
       try {
-        const fresh = await fetchModelsDevCatalog(this.options.manualTimeoutMs ?? 10_000);
+        const fresh = await fetchModelsDevCatalog(this.options.manualTimeoutMs ?? 10_000, signal);
         const freshUpdatedAt = Date.now();
         const changed = !sameMetadata(current.metadata, fresh);
         await (this.options.writeSnapshot ?? writeCache)(modelsDevCachePath(), fresh, freshUpdatedAt);

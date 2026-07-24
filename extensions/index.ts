@@ -25,14 +25,6 @@ export default async function (pi: ExtensionAPI) {
     const runtime = new ProviderRuntime({ pi, config, catalog });
     registerCliproxyapiCommand(pi, runtime, catalog);
     await runtime.start();
-
-    let backgroundRefreshStarted = false;
-    pi.on("session_start", (event) => {
-      if (event.reason !== "startup" || backgroundRefreshStarted) return;
-      backgroundRefreshStarted = true;
-      // Cached models are the normal startup path; refresh quietly in the background.
-      void runtime.refresh("models", "background");
-    });
   } catch (error) {
     registerCliproxyapiCommand(pi);
     pi.registerProvider(config.providerName, buildProviderRegistration(config, buildUnavailableProviderModels()).config);
