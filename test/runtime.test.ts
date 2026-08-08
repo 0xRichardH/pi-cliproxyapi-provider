@@ -75,6 +75,28 @@ test("runtime refreshModels invokes a models-only catalog refresh with network w
   assert.equal(freshModels[0].id, "network-fresh");
 });
 
+test("runtime refreshModels lets Pi publish the returned catalog without competing registration", async () => {
+  let registrations = 0;
+  const catalog = {
+    load: async () => snapshot("cached"),
+    refresh: async () => ({
+      snapshot: snapshot("gpt-5.6-codex", true),
+      models: { attempted: true, updated: true, changed: true },
+      metadata: { attempted: false, updated: false, changed: false },
+    }),
+  };
+  const runtime = new ProviderRuntime({
+    pi: { registerProvider: () => { registrations += 1; } } as any,
+    config,
+    catalog: catalog as any,
+  });
+
+  const models = await runtime.refreshModels({ allowNetwork: true } as any);
+
+  assert.equal(models[0].id, "gpt-5.6-codex");
+  assert.equal(registrations, 0);
+});
+
 test("runtime refreshModels maps context.force to manual mode and passes signal", async () => {
   let receivedMode: string | undefined;
   let receivedSignal: AbortSignal | undefined;

@@ -71,7 +71,7 @@ test("metadata comparison ignores object key order", async () => {
     await instance.load();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request) => {
-      assert.equal(String(url), "https://models.dev/models.json");
+      assert.equal(String(url), "https://models.dev/api.json");
       return new Response(JSON.stringify({ "openai/fresh": { reasoning: true, name: "Fresh", id: "openai/fresh" } }), { status: 200 });
     }) as typeof fetch;
     try {
