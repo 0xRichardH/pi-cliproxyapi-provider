@@ -47,9 +47,9 @@ export class ProviderRuntime {
       ? async () => credential.key
       : () => getDiscoveryApiKey(this.options.config.providerName);
     const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
-    const models = (result.snapshot.built.models.length > 0 ? result.snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
-    this.register(result.snapshot, false);
-    return models;
+    return (result.snapshot.built.models.length > 0
+      ? result.snapshot.built.models
+      : buildUnavailableProviderModels()) as ProviderModelConfig[];
   }
 
   private register(snapshot: CatalogSnapshot, force: boolean): void {
