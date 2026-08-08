@@ -11,7 +11,7 @@ test("models.dev updater supports flat and provider-organized catalogs", () => {
   const normalized = normalizeModelsDevCatalog({
     ...filler(100),
     "xai/grok": { id: "xai/grok", reasoning: true },
-    openai: { models: { gpt: { id: "gpt", reasoning: true } } },
+    openai: { id: "openai", models: { gpt: { id: "gpt", reasoning: true } } },
   });
 
   assert.equal(normalized["openai/gpt"].id, "openai/gpt");

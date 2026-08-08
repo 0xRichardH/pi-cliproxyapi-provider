@@ -6,15 +6,16 @@ export function normalizeModelsDevCatalog(payload) {
   const catalog = {};
   for (const [key, value] of Object.entries(payload)) {
     if (!value || typeof value !== "object") continue;
-    if (typeof value.id === "string") {
-      catalog[key] = { ...value, id: value.id.includes("/") ? value.id : key };
+    if (value.models && typeof value.models === "object") {
+      for (const [modelId, metadata] of Object.entries(value.models)) {
+        if (!metadata || typeof metadata !== "object" || typeof metadata.id !== "string") continue;
+        const canonicalId = metadata.id.includes("/") ? metadata.id : `${key}/${modelId}`;
+        catalog[canonicalId] = { ...metadata, id: canonicalId };
+      }
       continue;
     }
-    if (!value.models || typeof value.models !== "object") continue;
-    for (const [modelId, metadata] of Object.entries(value.models)) {
-      if (!metadata || typeof metadata !== "object" || typeof metadata.id !== "string") continue;
-      const canonicalId = metadata.id.includes("/") ? metadata.id : `${key}/${modelId}`;
-      catalog[canonicalId] = { ...metadata, id: canonicalId };
+    if (typeof value.id === "string") {
+      catalog[key] = { ...value, id: value.id.includes("/") ? value.id : key };
     }
   }
 

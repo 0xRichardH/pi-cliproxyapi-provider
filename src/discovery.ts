@@ -7,7 +7,9 @@ export function cpaModelsCachePath(config: CpaProviderConfig): string {
 }
 
 export function modelsDevCachePath(): string {
-  return join(cacheDir(), "models-dev.json");
+  // Keep provider-catalog metadata separate from the former lab-level
+  // models.json cache, which omitted provider pricing.
+  return join(cacheDir(), "models-dev-api.json");
 }
 
 export function discoveryHeaders(config: CpaProviderConfig, apiKey?: string): Record<string, string> {

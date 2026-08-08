@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { ModelsDevCatalog, ModelsDevMetadata } from "./types.ts";
 import { withNetworkTimeout } from "./network.ts";
 
-export const MODELS_DEV_URL = "https://models.dev/models.json";
+export const MODELS_DEV_URL = "https://models.dev/api.json";
 
 function isMetadata(value: unknown): value is ModelsDevMetadata {
   return !!value && typeof value === "object" && typeof (value as { id?: unknown }).id === "string";

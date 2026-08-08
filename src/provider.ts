@@ -1,5 +1,6 @@
 import type { CpaModel } from "./cpa.ts";
 import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
+import { getModelApiOverride } from "./model-api.ts";
 import { getModelCapabilityOverrides } from "./model-capabilities.ts";
 import type { InputModality, ModelsDevCatalog, ModelsDevMetadata, ProviderModelConfigLike } from "./types.ts";
 
@@ -30,24 +31,40 @@ function inputFromMetadata(metadata: ModelsDevMetadata): InputModality[] {
 }
 
 function costFromMetadata(metadata: ModelsDevMetadata): ProviderModelConfigLike["cost"] {
+  const tiers = metadata.cost?.tiers?.flatMap((tier) => {
+    const threshold = tier.tier?.size;
+    if (tier.tier?.type !== "context" || typeof threshold !== "number") return [];
+    return [{
+      inputTokensAbove: threshold,
+      input: tier.input ?? 0,
+      output: tier.output ?? 0,
+      cacheRead: tier.cache_read ?? 0,
+      cacheWrite: tier.cache_write ?? 0,
+    }];
+  });
+
   return {
     input: metadata.cost?.input ?? 0,
     output: metadata.cost?.output ?? 0,
     cacheRead: metadata.cost?.cache_read ?? 0,
     cacheWrite: metadata.cost?.cache_write ?? 0,
+    ...(tiers && tiers.length > 0 ? { tiers } : {}),
   };
 }
 
 function modelFromMetadata(cpaModel: CpaModel, metadata: ModelsDevMetadata): ProviderModelConfigLike {
-  const capabilityOverrides = getModelCapabilityOverrides({
+  const capabilityContext = {
     availableModelId: cpaModel.id,
     metadataModelId: metadata.id,
-  });
+  };
+  const capabilityOverrides = getModelCapabilityOverrides(capabilityContext);
+  const api = getModelApiOverride(capabilityContext);
 
   return {
     id: cpaModel.id,
     name: metadata.name ?? cpaModel.id,
     reasoning: capabilityOverrides.reasoning ?? metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
+    ...(api ? { api } : {}),
     ...(capabilityOverrides.thinkingLevelMap
       ? { thinkingLevelMap: capabilityOverrides.thinkingLevelMap }
       : {}),
@@ -67,13 +84,16 @@ function cloneModelDefaults(): typeof PI_MODEL_DEFAULTS {
 }
 
 function defaultModel(cpaModel: CpaModel): ProviderModelConfigLike {
-  const capabilityOverrides = getModelCapabilityOverrides({ availableModelId: cpaModel.id });
+  const modelContext = { availableModelId: cpaModel.id };
+  const capabilityOverrides = getModelCapabilityOverrides(modelContext);
+  const api = getModelApiOverride(modelContext);
 
   return {
     id: cpaModel.id,
     name: cpaModel.id,
     ...cloneModelDefaults(),
     ...capabilityOverrides,
+    ...(api ? { api } : {}),
   };
 }
 

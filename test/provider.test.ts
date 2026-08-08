@@ -85,6 +85,57 @@ test("adds the full thinking map to every GPT-5.6 model family member", () => {
   }
 });
 
+test("routes GPT-5.6 family models through the Responses API", () => {
+  const result = buildProviderModels([
+    { id: "gpt-5.6" },
+    { id: "gpt-5.6-codex" },
+    { id: "0xdev/gpt-5.6-codex-mini" },
+    { id: "gpt-5.60" },
+    { id: "claude-opus-4-6" },
+  ], {}, {});
+
+  assert.deepEqual(result.models.map((model) => model.api), [
+    "openai-responses",
+    "openai-responses",
+    "openai-responses",
+    undefined,
+    undefined,
+  ]);
+});
+
+test("maps models.dev provider pricing and context tiers to pi costs", () => {
+  const result = buildProviderModels(
+    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
+    {
+      "openai/gpt-5.6-sol": {
+        id: "openai/gpt-5.6-sol",
+        cost: {
+          input: 5,
+          output: 30,
+          cache_read: 0.5,
+          cache_write: 6.25,
+          tiers: [{
+            input: 10,
+            output: 45,
+            cache_read: 1,
+            cache_write: 12.5,
+            tier: { type: "context", size: 272000 },
+          }],
+        },
+      },
+    },
+    {},
+  );
+
+  assert.deepEqual(result.models[0].cost, {
+    input: 5,
+    output: 30,
+    cacheRead: 0.5,
+    cacheWrite: 6.25,
+    tiers: [{ inputTokensAbove: 272000, input: 10, output: 45, cacheRead: 1, cacheWrite: 12.5 }],
+  });
+});
+
 test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   const result = buildProviderModels(
     [{ id: "custom-luna" }],
@@ -99,6 +150,7 @@ test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   );
 
   assert.equal(result.models[0].reasoning, true);
+  assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
 });
 

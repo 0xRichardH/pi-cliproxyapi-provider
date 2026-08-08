@@ -47,6 +47,8 @@ export class ProviderRuntime {
       ? async () => credential.key
       : () => getDiscoveryApiKey(this.options.config.providerName);
     const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
+    // Pi publishes refreshModels' return value synchronously. Registering here as
+    // well would create a second, competing catalog publication.
     return (result.snapshot.built.models.length > 0
       ? result.snapshot.built.models
       : buildUnavailableProviderModels()) as ProviderModelConfig[];
