@@ -103,37 +103,48 @@ test("routes GPT-5.6 family models through the Responses API", () => {
   ]);
 });
 
-test("maps models.dev provider pricing and context tiers to pi costs", () => {
-  const result = buildProviderModels(
-    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
-    {
-      "openai/gpt-5.6-sol": {
-        id: "openai/gpt-5.6-sol",
-        cost: {
-          input: 5,
-          output: 30,
-          cache_read: 0.5,
-          cache_write: 6.25,
-          tiers: [{
-            input: 10,
-            output: 45,
-            cache_read: 1,
-            cache_write: 12.5,
-            tier: { type: "context", size: 272000 },
-          }],
-        },
+test("requires an explicit alias before applying ambiguous provider pricing", () => {
+  const providerCatalog = {
+    "openai/gpt-5.6-sol": {
+      id: "openai/gpt-5.6-sol",
+      cost: {
+        input: 5,
+        output: 30,
+        cache_read: 0.5,
+        cache_write: 6.25,
+        tiers: [{
+          input: 10,
+          output: 45,
+          cache_read: 1,
+          cache_write: 12.5,
+          tier: { type: "context", size: 272000 },
+        }],
       },
     },
-    {},
-  );
+    "routing-run/gpt-5.6-sol": {
+      id: "routing-run/gpt-5.6-sol",
+      cost: { input: 2.5, output: 15 },
+    },
+  };
+  const cpaModel = { id: "gpt-5.6-sol", owned_by: "openai" };
 
-  assert.deepEqual(result.models[0].cost, {
+  const ambiguous = buildProviderModels([cpaModel], providerCatalog, {});
+  assert.deepEqual(ambiguous.models[0].cost, PI_MODEL_DEFAULTS.cost);
+  assert.equal(ambiguous.stats.unmatched, 1);
+
+  const configured = buildProviderModels(
+    [cpaModel],
+    providerCatalog,
+    { "gpt-5.6-sol": "openai/gpt-5.6-sol" },
+  );
+  assert.deepEqual(configured.models[0].cost, {
     input: 5,
     output: 30,
     cacheRead: 0.5,
     cacheWrite: 6.25,
     tiers: [{ inputTokensAbove: 272000, input: 10, output: 45, cacheRead: 1, cacheWrite: 12.5 }],
   });
+  assert.equal(configured.stats.matchMethods.alias, 1);
 });
 
 test("recognizes GPT-5.6 through a canonical metadata alias", () => {

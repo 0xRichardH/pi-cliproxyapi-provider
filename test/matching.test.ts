@@ -54,5 +54,22 @@ test("returns undefined for ambiguous or unknown model IDs", () => {
   };
 
   assert.equal(findMetadataMatch({ id: "gpt-5.5", owned_by: "router" }, ambiguous, {}), undefined);
+  assert.equal(findMetadataMatch({ id: "gpt-5.5", owned_by: "openai" }, ambiguous, {}), undefined);
   assert.equal(findMetadataMatch({ id: "unknown-model", owned_by: "router" }, catalog, {}), undefined);
+});
+
+test("allows an explicit alias to resolve provider pricing ambiguity", () => {
+  const ambiguous = {
+    ...catalog,
+    "other/gpt-5.5": { id: "other/gpt-5.5", name: "Other GPT-5.5" }
+  };
+
+  const match = findMetadataMatch(
+    { id: "gpt-5.5", owned_by: "openai" },
+    ambiguous,
+    { "gpt-5.5": "openai/gpt-5.5" },
+  );
+
+  assert.equal(match?.metadataId, "openai/gpt-5.5");
+  assert.equal(match?.method, "alias");
 });

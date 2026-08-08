@@ -47,16 +47,17 @@ export function findMetadataMatch(
     return { metadataId: cpaModel.id, metadata: catalog[cpaModel.id], method: "exact" };
   }
 
+  const suffixCandidates = Object.keys(catalog).filter((key) => key.endsWith(`/${cpaModel.id}`));
   const owner = cpaModel.owned_by?.trim().toLowerCase();
   const canonicalOwner = owner ? CANONICAL_OWNER_PREFIXES[owner] : undefined;
-  if (canonicalOwner) {
+  if (canonicalOwner && suffixCandidates.length <= 1) {
     const ownerKey = `${canonicalOwner}/${cpaModel.id}`;
     if (catalog[ownerKey]) {
       return { metadataId: ownerKey, metadata: catalog[ownerKey], method: "owner-prefix" };
     }
   }
 
-  const suffixKey = oneMatch(Object.keys(catalog).filter((key) => key.endsWith(`/${cpaModel.id}`)));
+  const suffixKey = oneMatch(suffixCandidates);
   if (suffixKey) {
     return { metadataId: suffixKey, metadata: catalog[suffixKey], method: "suffix" };
   }
