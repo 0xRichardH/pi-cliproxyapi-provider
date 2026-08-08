@@ -1,4 +1,5 @@
 import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
+import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 
 export type InputModality = "text" | "image";
 
@@ -29,6 +30,16 @@ export interface ModelsDevMetadata {
     output?: number;
     cache_read?: number;
     cache_write?: number;
+    tiers?: Array<{
+      input?: number;
+      output?: number;
+      cache_read?: number;
+      cache_write?: number;
+      tier?: {
+        type?: string;
+        size?: number;
+      };
+    }>;
   };
 }
 
@@ -38,6 +49,7 @@ export interface ProviderModelConfigLike {
   id: string;
   name: string;
   reasoning: boolean;
+  api?: ProviderModelConfig["api"];
   thinkingLevelMap?: ThinkingLevelMap;
   input: InputModality[];
   cost: {
@@ -45,6 +57,13 @@ export interface ProviderModelConfigLike {
     output: number;
     cacheRead: number;
     cacheWrite: number;
+    tiers?: Array<{
+      inputTokensAbove: number;
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    }>;
   };
   contextWindow: number;
   maxTokens: number;

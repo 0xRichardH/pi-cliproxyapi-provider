@@ -16,12 +16,17 @@ test("parses provider-organized models.dev API catalog", () => {
     openai: {
       id: "openai",
       models: {
-        "gpt-5.5": { id: "gpt-5.5", name: "GPT-5.5" }
+        "gpt-5.5": {
+          id: "gpt-5.5",
+          name: "GPT-5.5",
+          cost: { input: 5, output: 30, cache_read: 0.5, cache_write: 6.25 },
+        }
       }
     }
   });
 
   assert.equal(catalog["openai/gpt-5.5"].name, "GPT-5.5");
+  assert.equal(catalog["openai/gpt-5.5"].cost?.output, 30);
 });
 
 test("aborts models.dev catalog fetch instead of waiting forever on a stuck network fetch", async () => {

@@ -42,7 +42,7 @@ test("extension registers provider with refreshModels capability", async () => {
 
       const refreshed = await providers[0].config.refreshModels({ allowNetwork: true });
       assert.equal(refreshed[0].id, "fresh-model");
-      assert.equal(providers.at(-1)?.config.models[0].id, "fresh-model");
+      assert.equal(providers.length, 1);
     });
   } finally {
     globalThis.fetch = originalFetch;
