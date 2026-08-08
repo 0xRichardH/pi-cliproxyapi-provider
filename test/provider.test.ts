@@ -103,10 +103,11 @@ test("routes GPT-5.6 family models through the Responses API", () => {
   ]);
 });
 
-test("requires an explicit alias before applying ambiguous provider pricing", () => {
+test("uses the canonical CPA owner for provider pricing and context metadata", () => {
   const providerCatalog = {
     "openai/gpt-5.6-sol": {
       id: "openai/gpt-5.6-sol",
+      limit: { context: 1050000, output: 128000 },
       cost: {
         input: 5,
         output: 30,
@@ -123,28 +124,27 @@ test("requires an explicit alias before applying ambiguous provider pricing", ()
     },
     "routing-run/gpt-5.6-sol": {
       id: "routing-run/gpt-5.6-sol",
+      limit: { context: 1000000, output: 128000 },
       cost: { input: 2.5, output: 15 },
     },
   };
-  const cpaModel = { id: "gpt-5.6-sol", owned_by: "openai" };
-
-  const ambiguous = buildProviderModels([cpaModel], providerCatalog, {});
-  assert.deepEqual(ambiguous.models[0].cost, PI_MODEL_DEFAULTS.cost);
-  assert.equal(ambiguous.stats.unmatched, 1);
-
-  const configured = buildProviderModels(
-    [cpaModel],
+  const result = buildProviderModels(
+    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
     providerCatalog,
-    { "gpt-5.6-sol": "openai/gpt-5.6-sol" },
+    {},
   );
-  assert.deepEqual(configured.models[0].cost, {
+
+  assert.deepEqual(result.models[0].cost, {
     input: 5,
     output: 30,
     cacheRead: 0.5,
     cacheWrite: 6.25,
     tiers: [{ inputTokensAbove: 272000, input: 10, output: 45, cacheRead: 1, cacheWrite: 12.5 }],
   });
-  assert.equal(configured.stats.matchMethods.alias, 1);
+  assert.equal(result.models[0].contextWindow, 1050000);
+  assert.equal(result.models[0].maxTokens, 128000);
+  assert.equal(result.stats.matchMethods["owner-prefix"], 1);
+  assert.equal(result.stats.unmatched, 0);
 });
 
 test("recognizes GPT-5.6 through a canonical metadata alias", () => {

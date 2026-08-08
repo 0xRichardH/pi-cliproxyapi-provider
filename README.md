@@ -1,6 +1,6 @@
 # pi-cliproxyapi-provider
 
-`pi-cliproxyapi-provider` registers one [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance as a pi model provider. It discovers models from CLIProxyAPI's OpenAI-compatible `/v1/models` endpoint and enriches them with provider-specific metadata from [models.dev](https://models.dev/). Mixed catalogs use OpenAI Completions by default, while GPT-5.6 family models (including Codex variants) use the Responses API so pi can read their usage data. Provider pricing is applied only when the models.dev entry is unambiguous or selected with a metadata alias.
+`pi-cliproxyapi-provider` registers one [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance as a pi model provider. It discovers models from CLIProxyAPI's OpenAI-compatible `/v1/models` endpoint and enriches them with provider-specific metadata from [models.dev](https://models.dev/). Mixed catalogs use OpenAI Completions by default, while GPT-5.6 family models (including Codex variants) use the Responses API so pi can read their usage data. Canonical `/v1/models` owners such as `openai` select the matching provider metadata; aliases can override that selection when a proxy routes billing differently.
 
 ## Install
 
@@ -107,7 +107,7 @@ export CLIPROXYAPI_API_KEY=your-key
 
 Aliases affect metadata only. The package still sends the original CLIProxyAPI model ID to the proxy.
 
-When models.dev lists the same model under multiple billing providers, the package leaves its cost at zero rather than trusting CLIProxyAPI's `owned_by` field as a billing-provider identifier. Add an alias to select the provider whose pricing matches your CLIProxyAPI setup:
+When `/v1/models` reports a canonical owner such as `openai`, the package uses that provider's metadata even if models.dev lists the model under several providers. Add an alias when CLIProxyAPI's reported owner does not match the provider whose limits and pricing apply to your setup.
 
 Add global aliases to:
 

@@ -50,7 +50,7 @@ export function findMetadataMatch(
   const suffixCandidates = Object.keys(catalog).filter((key) => key.endsWith(`/${cpaModel.id}`));
   const owner = cpaModel.owned_by?.trim().toLowerCase();
   const canonicalOwner = owner ? CANONICAL_OWNER_PREFIXES[owner] : undefined;
-  if (canonicalOwner && suffixCandidates.length <= 1) {
+  if (canonicalOwner) {
     const ownerKey = `${canonicalOwner}/${cpaModel.id}`;
     if (catalog[ownerKey]) {
       return { metadataId: ownerKey, metadata: catalog[ownerKey], method: "owner-prefix" };
