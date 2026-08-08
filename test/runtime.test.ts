@@ -13,6 +13,15 @@ const config: CpaProviderConfig = {
   modelAliases: {},
 };
 
+function refreshContext(overrides: Record<string, unknown> = {}): any {
+  return {
+    allowNetwork: true,
+    signal: new AbortController().signal,
+    publish: async () => true,
+    ...overrides,
+  };
+}
+
 function snapshot(id: string, reasoning = false): any {
   const model = { id, name: id, reasoning, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 };
   return {
@@ -68,10 +77,10 @@ test("runtime refreshModels invokes a models-only catalog refresh with network w
     catalog: catalog as any,
   });
 
-  const cachedModels = await runtime.refreshModels({ allowNetwork: false } as any);
+  const cachedModels = await runtime.refreshModels(refreshContext({ allowNetwork: false }));
   assert.equal(cachedModels[0].id, "cached");
 
-  const freshModels = await runtime.refreshModels({ allowNetwork: true } as any);
+  const freshModels = await runtime.refreshModels(refreshContext());
   assert.equal(freshModels[0].id, "network-fresh");
 });
 
@@ -98,7 +107,7 @@ test("runtime refreshModels maps context.force to manual mode and passes signal"
   });
 
   const controller = new AbortController();
-  const models = await runtime.refreshModels({ allowNetwork: true, force: true, signal: controller.signal } as any);
+  const models = await runtime.refreshModels(refreshContext({ force: true, signal: controller.signal }));
 
   assert.equal(receivedMode, "manual");
   assert.equal(receivedSignal, controller.signal);
@@ -124,10 +133,32 @@ test("runtime refreshModels uses Pi's effective API-key credential", async () =>
     catalog: catalog as any,
   });
 
-  await runtime.refreshModels({
-    allowNetwork: true,
+  await runtime.refreshModels(refreshContext({
     credential: { type: "api_key", key: "runtime-key" },
-  } as any);
+  }));
 
   assert.equal(receivedApiKey, "runtime-key");
+});
+
+test("runtime refreshModels leaves publication to Pi", async () => {
+  const registrations: any[] = [];
+  const catalog = {
+    load: async () => snapshot("cached"),
+    refresh: async () => ({
+      snapshot: snapshot("fresh"),
+      models: { attempted: true, updated: true, changed: true },
+      metadata: { attempted: false, updated: false, changed: false },
+    }),
+  };
+  const runtime = new ProviderRuntime({
+    pi: { registerProvider: (...args: any[]) => registrations.push(args) } as any,
+    config,
+    catalog: catalog as any,
+  });
+
+  await runtime.start();
+  const models = await runtime.refreshModels(refreshContext());
+
+  assert.equal(models[0].id, "fresh");
+  assert.equal(registrations.length, 1);
 });

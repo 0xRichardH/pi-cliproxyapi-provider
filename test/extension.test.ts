@@ -40,9 +40,13 @@ test("extension registers provider with refreshModels capability", async () => {
       assert.equal(providers[0].config.models[0].id, "login-required");
       assert.equal(typeof providers[0].config.refreshModels, "function");
 
-      const refreshed = await providers[0].config.refreshModels({ allowNetwork: true });
+      const refreshed = await providers[0].config.refreshModels({
+        allowNetwork: true,
+        signal: new AbortController().signal,
+        publish: async () => true,
+      });
       assert.equal(refreshed[0].id, "fresh-model");
-      assert.equal(providers.at(-1)?.config.models[0].id, "fresh-model");
+      assert.equal(providers.length, 1);
     });
   } finally {
     globalThis.fetch = originalFetch;
