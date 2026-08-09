@@ -8,6 +8,7 @@ import { buildProviderRegistration } from "../src/registration.ts";
 import { buildUnavailableProviderModels } from "../src/provider.ts";
 import { registerCliproxyapiCommand } from "../src/commands.ts";
 import { getDiscoveryApiKey } from "../src/auth.ts";
+import { loadProviderSettings } from "../src/settings.ts";
 
 const extensionDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(extensionDir);
@@ -16,9 +17,12 @@ const bundledModelsDevPath = join(packageRoot, "data", "models-dev-fallback.json
 export default async function (pi: ExtensionAPI) {
   let config = DEFAULT_CONFIG;
   try {
-    config = loadConfig(process.cwd());
+    const cwd = process.cwd();
+    config = loadConfig(cwd);
+    const settings = loadProviderSettings(cwd);
     const catalog = new ProviderCatalog({
       config,
+      gpt56ContextWindow: settings.gpt56ContextWindow,
       bundledModelsDevPath,
       getApiKey: () => getDiscoveryApiKey(config.providerName),
     });

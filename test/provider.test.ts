@@ -103,7 +103,7 @@ test("routes GPT-5.6 family models through the Responses API", () => {
   ]);
 });
 
-test("uses the canonical CPA owner for provider pricing and context metadata", () => {
+test("uses provider pricing while keeping the canonical GPT-5.6 context window by default", () => {
   const providerCatalog = {
     "openai/gpt-5.6-sol": {
       id: "openai/gpt-5.6-sol",
@@ -141,10 +141,19 @@ test("uses the canonical CPA owner for provider pricing and context metadata", (
     cacheWrite: 6.25,
     tiers: [{ inputTokensAbove: 272000, input: 10, output: 45, cacheRead: 1, cacheWrite: 12.5 }],
   });
-  assert.equal(result.models[0].contextWindow, 1050000);
+  assert.equal(result.models[0].contextWindow, 272000);
   assert.equal(result.models[0].maxTokens, 128000);
   assert.equal(result.stats.matchMethods["owner-prefix"], 1);
   assert.equal(result.stats.unmatched, 0);
+
+  const full = buildProviderModels(
+    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
+    providerCatalog,
+    {},
+    "full",
+  );
+  assert.equal(full.models[0].contextWindow, 1050000);
+  assert.deepEqual(full.models[0].cost, result.models[0].cost);
 });
 
 test("recognizes GPT-5.6 through a canonical metadata alias", () => {
@@ -163,6 +172,7 @@ test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   assert.equal(result.models[0].reasoning, true);
   assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+  assert.equal(result.models[0].contextWindow, 272000);
 });
 
 test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
@@ -171,4 +181,5 @@ test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
   assert.equal(result.models[0].reasoning, true);
   assert.equal(result.models[0].thinkingLevelMap?.off, "none");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+  assert.equal(result.models[0].contextWindow, 272000);
 });

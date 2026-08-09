@@ -56,6 +56,46 @@ test("extension registers provider with refreshModels capability", async () => {
   }
 });
 
+test("extension applies the full GPT-5.6 context window from settings.json", async () => {
+  const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-settings-home-"));
+  const originalHome = process.env.HOME;
+  const originalFetch = globalThis.fetch;
+
+  try {
+    process.env.HOME = home;
+    const agentDir = join(home, ".pi", "agent");
+    await mkdir(agentDir, { recursive: true });
+    await writeFile(join(agentDir, "settings.json"), JSON.stringify({
+      "pi-cliproxyapi-provider": { gpt56ContextWindow: "full" },
+    }));
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      data: [{ id: "gpt-5.6-sol", owned_by: "openai" }],
+    }), { status: 200 })) as typeof fetch;
+
+    await withTempCwd(async () => {
+      const providers: Array<{ name: string; config: any }> = [];
+      await extension({
+        registerCommand: () => {},
+        registerProvider: (name: string, config: any) => providers.push({ name, config }),
+        on: () => {},
+      } as any);
+
+      const refreshed = await providers[0].config.refreshModels({
+        allowNetwork: true,
+        signal: new AbortController().signal,
+        publish: async () => true,
+      });
+      const model = refreshed.find((entry: any) => entry.id === "gpt-5.6-sol");
+      assert.equal(model?.contextWindow, 1050000);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("manual refresh uses the active model registry credential", async () => {
   const home = await mkdtemp(join(tmpdir(), "pi-cpa-extension-refresh-home-"));
   const originalHome = process.env.HOME;

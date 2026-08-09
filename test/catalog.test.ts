@@ -34,7 +34,13 @@ async function withTempHome<T>(fn: (home: string, fallback: string) => Promise<T
 }
 
 function catalog(fallback: string): ProviderCatalog {
-  return new ProviderCatalog({ config, bundledModelsDevPath: fallback, getApiKey: async () => undefined, backgroundTimeoutMs: 50 });
+  return new ProviderCatalog({
+    config,
+    gpt56ContextWindow: "canonical",
+    bundledModelsDevPath: fallback,
+    getApiKey: async () => undefined,
+    backgroundTimeoutMs: 50,
+  });
 }
 
 test("catalog load ignores malformed source snapshots", async () => {
@@ -111,6 +117,7 @@ test("snapshot write failure preserves the in-memory CPA snapshot", async () => 
     await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }]);
     const instance = new ProviderCatalog({
       config,
+      gpt56ContextWindow: "canonical",
       bundledModelsDevPath: fallback,
       getApiKey: async () => undefined,
       writeSnapshot: async () => { throw new Error("disk full"); },

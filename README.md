@@ -72,6 +72,27 @@ CLIPROXYAPI_MODELS_DEV_ENABLED
 
 Project config only supports metadata aliases. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
 
+### GPT-5.6 context window
+
+The provider advertises a `272000`-token context window for GPT-5.6 models by default. This matches Pi's conservative canonical limit, keeps compaction behavior consistent with native model definitions, and avoids assuming that every CLIProxyAPI upstream account or route enables the provider's full long-context limit.
+
+To opt into the full context limit reported by models.dev (currently `1050000` tokens for OpenAI GPT-5.6 models), add this package-specific setting to global `~/.pi/agent/settings.json`:
+
+```json
+{
+  "pi-cliproxyapi-provider": {
+    "gpt56ContextWindow": "full"
+  }
+}
+```
+
+The same setting can be placed in project `.pi/settings.json`; project settings override global settings. Supported values are:
+
+- `"canonical"` (default): advertise `272000` tokens and compact at Pi's conservative boundary.
+- `"full"`: advertise the models.dev context limit, allowing Pi to retain substantially more history before compaction.
+
+Use `"full"` only when the selected CLIProxyAPI route and upstream account actually support that limit. Requests above `272000` input tokens also use the higher models.dev context-pricing tier where one is defined. Run `/reload` after changing the setting so Pi rebuilds the provider model catalog.
+
 ## Authenticate
 
 Use pi's normal API-key login flow:
