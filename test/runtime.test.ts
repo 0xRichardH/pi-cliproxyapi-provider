@@ -53,8 +53,10 @@ test("runtime registers cached models immediately and refreshes without reload",
 
   assert.equal(registrations.length, 2);
   assert.equal(registrations[0].provider.models[0].id, "cached");
+  assert.equal(registrations[0].provider.models[0].compat.supportsStrictMode, false);
   assert.equal(registrations[1].provider.models[0].id, "fresh");
   assert.equal(registrations[1].provider.models[0].reasoning, true);
+  assert.equal(registrations[1].provider.models[0].compat.supportsStrictMode, false);
 });
 
 test("runtime refreshModels invokes a models-only catalog refresh with network when allowNetwork is true", async () => {
@@ -64,8 +66,11 @@ test("runtime refreshModels invokes a models-only catalog refresh with network w
       assert.equal(target, "models");
       assert.equal(mode, "background");
       if (signal?.aborted) throw signal.reason;
+      const refreshed = snapshot("network-fresh");
+      refreshed.built.models[0].api = "openai-responses";
+      refreshed.built.models[0].compat = { supportsStrictMode: true };
       return {
-        snapshot: snapshot("network-fresh"),
+        snapshot: refreshed,
         models: { attempted: true, updated: true, changed: true },
         metadata: { attempted: false, updated: false, changed: false },
       };
@@ -79,9 +84,12 @@ test("runtime refreshModels invokes a models-only catalog refresh with network w
 
   const cachedModels = await runtime.refreshModels(refreshContext({ allowNetwork: false }));
   assert.equal(cachedModels[0].id, "cached");
+  assert.equal((cachedModels[0].compat as { supportsStrictMode?: boolean })?.supportsStrictMode, false);
 
   const freshModels = await runtime.refreshModels(refreshContext());
   assert.equal(freshModels[0].id, "network-fresh");
+  assert.equal(freshModels[0].api, "openai-responses");
+  assert.equal((freshModels[0].compat as { supportsStrictMode?: boolean })?.supportsStrictMode, false);
 });
 
 test("runtime refreshModels lets Pi publish the returned catalog without competing registration", async () => {
@@ -104,6 +112,27 @@ test("runtime refreshModels lets Pi publish the returned catalog without competi
 
   assert.equal(models[0].id, "gpt-5.6-codex");
   assert.equal(registrations, 0);
+});
+
+test("runtime refreshModels normalizes the unavailable fallback after an empty network refresh", async () => {
+  const catalog = {
+    load: async () => snapshot("cached"),
+    refresh: async () => ({
+      snapshot: snapshot(""),
+      models: { attempted: true, updated: true, changed: true },
+      metadata: { attempted: false, updated: false, changed: false },
+    }),
+  };
+  const runtime = new ProviderRuntime({
+    pi: { registerProvider: () => {} } as any,
+    config,
+    catalog: catalog as any,
+  });
+
+  const models = await runtime.refreshModels(refreshContext());
+
+  assert.equal(models[0].id, "login-required");
+  assert.equal((models[0].compat as { supportsStrictMode?: boolean })?.supportsStrictMode, false);
 });
 
 test("runtime refreshModels maps context.force to manual mode and passes signal", async () => {

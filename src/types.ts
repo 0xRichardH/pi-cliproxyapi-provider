@@ -50,6 +50,7 @@ export interface ProviderModelConfigLike {
   name: string;
   reasoning: boolean;
   api?: ProviderModelConfig["api"];
+  compat?: ProviderModelConfig["compat"];
   thinkingLevelMap?: ThinkingLevelMap;
   input: InputModality[];
   cost: {

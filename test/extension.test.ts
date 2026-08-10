@@ -46,6 +46,7 @@ test("extension registers provider with refreshModels capability", async () => {
         publish: async () => true,
       });
       assert.equal(refreshed[0].id, "fresh-model");
+      assert.equal(refreshed[0].compat?.supportsStrictMode, false);
       assert.equal(providers.length, 1);
     });
   } finally {
@@ -168,6 +169,7 @@ test("extension registers placeholder provider when global config is invalid", a
       assert.equal(providers.length, 1);
       assert.equal(providers[0].name, "cpa");
       assert.equal(providers[0].config.models[0].id, "login-required");
+      assert.equal(providers[0].config.models[0].compat.supportsStrictMode, false);
     });
   } finally {
     if (originalHome === undefined) delete process.env.HOME;
