@@ -3,7 +3,13 @@ import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
 import { getModelApiOverride, isGpt56Model, type ModelApiContext } from "./model-api.ts";
 import { getModelCapabilityOverrides } from "./model-capabilities.ts";
 import type { Gpt56ContextWindowMode } from "./settings.ts";
-import type { InputModality, ModelsDevCatalog, ModelsDevMetadata, ProviderModelConfigLike } from "./types.ts";
+import type {
+  InputModality,
+  ModelsDevCatalog,
+  ModelsDevMetadata,
+  ProviderModelConfigLike,
+  ProviderModelOverrides,
+} from "./types.ts";
 
 export const GPT_5_6_CANONICAL_CONTEXT_WINDOW = 272000;
 
@@ -125,6 +131,20 @@ function emptyMatchMethods(): Record<MetadataMatchMethod, number> {
   };
 }
 
+function applyModelOverride(
+  model: ProviderModelConfigLike,
+  overrides: ProviderModelOverrides,
+): ProviderModelConfigLike {
+  const override = overrides[model.id];
+  if (!override) return model;
+  return {
+    ...model,
+    ...(override.reasoning !== undefined ? { reasoning: override.reasoning } : {}),
+    ...(override.contextWindow !== undefined ? { contextWindow: override.contextWindow } : {}),
+    ...(override.maxTokens !== undefined ? { maxTokens: override.maxTokens } : {}),
+  };
+}
+
 export function buildUnavailableProviderModels(id = "login-required"): ProviderModelConfigLike[] {
   return [{ id, name: id, ...cloneModelDefaults() }];
 }
@@ -134,6 +154,7 @@ export function buildProviderModels(
   catalog: ModelsDevCatalog,
   aliases: Record<string, string>,
   gpt56ContextWindow: Gpt56ContextWindowMode = "canonical",
+  overrides: ProviderModelOverrides = {},
 ): BuildProviderModelsResult {
   const matchMethods = emptyMatchMethods();
   const unmatchedModelIds: string[] = [];
@@ -143,12 +164,15 @@ export function buildProviderModels(
     const match = findMetadataMatch(cpaModel, catalog, aliases);
     if (!match) {
       unmatchedModelIds.push(cpaModel.id);
-      return defaultModel(cpaModel, gpt56ContextWindow);
+      return applyModelOverride(defaultModel(cpaModel, gpt56ContextWindow), overrides);
     }
 
     enriched += 1;
     matchMethods[match.method] += 1;
-    return modelFromMetadata(cpaModel, match.metadata, gpt56ContextWindow);
+    return applyModelOverride(
+      modelFromMetadata(cpaModel, match.metadata, gpt56ContextWindow),
+      overrides,
+    );
   });
 
   return {

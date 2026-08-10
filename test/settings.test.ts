@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_PROVIDER_SETTINGS, loadProviderSettings } from "../src/settings.ts";
+import { DEFAULT_PROVIDER_SETTINGS, loadProviderSettings, saveProviderSettings } from "../src/settings.ts";
 
 async function withSettingsTree<T>(fn: (cwd: string, agentDir: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), "pi-cpa-settings-"));
@@ -29,25 +29,41 @@ test("uses the canonical GPT-5.6 context window by default", async () => {
 test("project settings override the global GPT-5.6 context window mode", async () => {
   await withSettingsTree(async (cwd, agentDir) => {
     await writeFile(join(agentDir, "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "canonical" },
+      [namespace]: { gpt56ContextWindow: "canonical", showStrictMode: false },
     }));
     await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "full" },
+      [namespace]: { gpt56ContextWindow: "full", showStrictMode: true },
     }));
 
-    assert.equal(loadProviderSettings(cwd, agentDir).gpt56ContextWindow, "full");
+    const settings = loadProviderSettings(cwd, agentDir);
+    assert.equal(settings.gpt56ContextWindow, "full");
+    assert.equal(settings.showStrictMode, true);
   });
 });
 
-test("rejects unsupported GPT-5.6 context window modes", async () => {
+test("saves package settings to the existing project settings file", async () => {
   await withSettingsTree(async (cwd, agentDir) => {
-    await writeFile(join(agentDir, "settings.json"), JSON.stringify({
-      [namespace]: { gpt56ContextWindow: "unbounded" },
-    }));
+    await writeFile(join(cwd, ".pi", "settings.json"), JSON.stringify({ unrelated: true }));
+    const path = saveProviderSettings(cwd, { gpt56ContextWindow: "full", showStrictMode: true });
 
-    assert.throws(
-      () => loadProviderSettings(cwd, agentDir),
-      /gpt56ContextWindow must be "canonical" or "full"/,
-    );
+    assert.equal(path, join(cwd, ".pi", "settings.json"));
+    assert.deepEqual(loadProviderSettings(cwd, agentDir), {
+      gpt56ContextWindow: "full",
+      showStrictMode: true,
+    });
+  });
+});
+
+test("rejects unsupported provider settings", async () => {
+  await withSettingsTree(async (cwd, agentDir) => {
+    for (const providerSettings of [
+      { gpt56ContextWindow: "unbounded" },
+      { showStrictMode: "yes" },
+    ]) {
+      await writeFile(join(agentDir, "settings.json"), JSON.stringify({
+        [namespace]: providerSettings,
+      }));
+      assert.throws(() => loadProviderSettings(cwd, agentDir), /pi-cliproxyapi-provider/);
+    }
   });
 });

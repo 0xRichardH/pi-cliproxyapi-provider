@@ -70,7 +70,7 @@ CLIPROXYAPI_AUTH_HEADER
 CLIPROXYAPI_MODELS_DEV_ENABLED
 ```
 
-Project config only supports metadata aliases. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
+Project config supports metadata aliases and bounded per-model overrides. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
 
 ### GPT-5.6 context window
 
@@ -91,7 +91,22 @@ The same setting can be placed in project `.pi/settings.json`; project settings 
 - `"canonical"` (default): advertise `272000` tokens and compact at Pi's conservative boundary.
 - `"full"`: advertise the models.dev context limit, allowing Pi to retain substantially more history before compaction.
 
-Use `"full"` only when the selected CLIProxyAPI route and upstream account actually support that limit. Requests above `272000` input tokens also use the higher models.dev context-pricing tier where one is defined. Run `/reload` after changing the setting so Pi rebuilds the provider model catalog.
+Use `"full"` only when the selected CLIProxyAPI route and upstream account actually support that limit. Requests above `272000` input tokens also use the higher models.dev context-pricing tier where one is defined.
+
+### Model and display configuration
+
+Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.json` value. The tabbed panel has `Connection`, `Models`, and `Display` sections; it controls the GPT-5.6 context-window mode and whether the model selector shows the published strict tool-schema capability.
+
+```json
+{
+  "pi-cliproxyapi-provider": {
+    "gpt56ContextWindow": "canonical",
+    "showStrictMode": false
+  }
+}
+```
+
+`showStrictMode` defaults to `false` because the selector stays compact for normal use. Enable it when diagnosing tool-schema behavior; model details always show `Strict tool schema` explicitly. Saving through `/cliproxyapi config` reloads Pi. Select `Connection` to open the endpoint and authentication editor.
 
 ## Authenticate
 
@@ -122,6 +137,9 @@ export CLIPROXYAPI_API_KEY=your-key
 /cliproxyapi refresh models     # refresh CLIProxyAPI availability only
 /cliproxyapi refresh metadata   # refresh models.dev metadata only
 /cliproxyapi aliases            # show unmatched model IDs for metadata aliases
+/cliproxyapi models             # inspect effective model settings and set bounded overrides
+/cliproxyapi config             # tabbed connection, model, and display configuration
+/cliproxyapi config connection  # open endpoint and authentication editor
 ```
 
 ## Metadata aliases
@@ -142,16 +160,32 @@ Add project aliases manually to:
 .pi/pi-cliproxyapi-provider/config.json
 ```
 
-Project config only reads `modelAliases`; other fields are ignored.
+Project config reads `modelAliases` and `modelOverrides`; other fields are ignored.
 
 ```json
 {
   "modelAliases": {
     "claude-opus-4-6-thinking": "anthropic/claude-opus-4-6",
     "gpt-5.6-sol": "openai/gpt-5.6-sol"
+  },
+  "modelOverrides": {
+    "gpt-5.6-sol": {
+      "contextWindow": 512000,
+      "maxTokens": 32768
+    }
   }
 }
 ```
+
+## Model inspector and overrides
+
+Run `/cliproxyapi models` in Pi TUI mode to inspect the models in the current CPA snapshot. The selector shows the effective API, reasoning mode, and context window. The detail view also shows input modalities, cost, thinking levels, and the compatibility values that Pi will publish.
+
+Only `reasoning`, `contextWindow`, and `maxTokens` are editable. Values are constrained to safe presets; choose `auto` to remove an override and restore the derived value after reload. API routing and compatibility stay provider-owned: GPT-5.6/Codex models remain on `openai-responses`, while the CLIProxyAPI workaround publishes `supportsStrictMode: false`.
+
+For CPA Responses requests, the extension also applies the Codex-compatible function-tool wire contract used by `pi-codex-conversion`: each function tool explicitly carries `strict: null`. This preserves optional tool arguments such as `interactive_shell.listBackground` without replacing CPA authentication, transport, discovery, or streaming with the ChatGPT-backed `openai-codex-responses` provider.
+
+Saving writes to an existing project config when present, otherwise to the global provider config, then reloads Pi. Project overrides take precedence over global overrides field by field.
 
 ## Snapshots and startup
 

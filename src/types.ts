@@ -3,6 +3,14 @@ import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 
 export type InputModality = "text" | "image";
 
+export interface ProviderModelOverride {
+  reasoning?: boolean;
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
+export type ProviderModelOverrides = Record<string, ProviderModelOverride>;
+
 export interface CpaProviderConfig {
   providerName: string;
   baseUrl: string;
@@ -11,6 +19,7 @@ export interface CpaProviderConfig {
   headers: Record<string, string>;
   modelsDevEnabled: boolean;
   modelAliases: Record<string, string>;
+  modelOverrides: ProviderModelOverrides;
 }
 
 export interface ModelsDevMetadata {
