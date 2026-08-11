@@ -3,6 +3,7 @@ import { readCache, writeCache, type CacheEnvelope } from "./cache.ts";
 import { fetchCpaModels, parseCpaModelsCache, type CpaModel } from "./cpa.ts";
 import { fetchModelsDevCatalog, parseModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
 import { buildProviderModels, type BuildProviderModelsResult } from "./provider.ts";
+import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type { CpaProviderConfig, ModelsDevCatalog } from "./types.ts";
 
 export type MetadataSource = "cache" | "bundled" | "disabled";
@@ -14,6 +15,7 @@ export interface CatalogSnapshot {
   metadata: ModelsDevCatalog;
   metadataUpdatedAt?: number;
   metadataSource: MetadataSource;
+  gpt56ContextWindow: Gpt56ContextWindowMode;
   built: BuildProviderModelsResult;
 }
 
@@ -32,6 +34,7 @@ export interface CatalogRefreshResult {
 
 export interface ProviderCatalogOptions {
   config: CpaProviderConfig;
+  gpt56ContextWindow: Gpt56ContextWindowMode;
   bundledModelsDevPath: string;
   getApiKey: () => Promise<string | undefined>;
   backgroundTimeoutMs?: number;
@@ -219,7 +222,13 @@ export class ProviderCatalog {
       metadata,
       metadataUpdatedAt,
       metadataSource,
-      built: buildProviderModels(cpaModels, metadata, this.options.config.modelAliases),
+      gpt56ContextWindow: this.options.gpt56ContextWindow,
+      built: buildProviderModels(
+        cpaModels,
+        metadata,
+        this.options.config.modelAliases,
+        this.options.gpt56ContextWindow,
+      ),
     };
     return this.snapshot;
   }

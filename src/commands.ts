@@ -100,6 +100,7 @@ function statusText(config: ReturnType<typeof loadConfig>, snapshot: CatalogSnap
     `Image-capable models: ${capabilityCount(snapshot, "image")}`,
     `CPA snapshot: ${age(snapshot.cpaUpdatedAt)}`,
     `models.dev metadata: ${snapshot.metadataSource}${snapshot.metadataUpdatedAt ? `, ${age(snapshot.metadataUpdatedAt)}` : ""}`,
+    `GPT-5.6 context window: ${snapshot.gpt56ContextWindow === "full" ? "full models.dev limit" : "canonical 272000"}`,
   ].join("\n");
 }
 

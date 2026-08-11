@@ -3,7 +3,7 @@ import type { ExtensionAPI, ProviderModelConfig } from "@earendil-works/pi-codin
 import { getDiscoveryApiKey } from "./auth.ts";
 import { ProviderCatalog, type CatalogRefreshResult, type CatalogSnapshot, type RefreshTarget } from "./catalog.ts";
 import { buildUnavailableProviderModels } from "./provider.ts";
-import { buildProviderRegistration } from "./registration.ts";
+import { buildProviderRegistration, normalizeProviderModels } from "./registration.ts";
 import type { CpaProviderConfig } from "./types.ts";
 
 export interface ProviderRuntimeOptions {
@@ -39,7 +39,9 @@ export class ProviderRuntime {
   async refreshModels(context: RefreshModelsContext): Promise<ProviderModelConfig[]> {
     if (!context.allowNetwork) {
       const snapshot = await this.options.catalog.load();
-      return (snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels()) as ProviderModelConfig[];
+      return normalizeProviderModels(
+        snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels(),
+      );
     }
     const mode = context.force ? "manual" : "background";
     const credential = context.credential;
@@ -47,9 +49,13 @@ export class ProviderRuntime {
       ? async () => credential.key
       : () => getDiscoveryApiKey(this.options.config.providerName);
     const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
-    return (result.snapshot.built.models.length > 0
-      ? result.snapshot.built.models
-      : buildUnavailableProviderModels()) as ProviderModelConfig[];
+    // Pi publishes refreshModels' return value synchronously. Registering here as
+    // well would create a second, competing catalog publication.
+    return normalizeProviderModels(
+      result.snapshot.built.models.length > 0
+        ? result.snapshot.built.models
+        : buildUnavailableProviderModels(),
+    );
   }
 
   private register(snapshot: CatalogSnapshot, force: boolean): void {

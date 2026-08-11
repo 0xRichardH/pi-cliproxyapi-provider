@@ -34,7 +34,13 @@ async function withTempHome<T>(fn: (home: string, fallback: string) => Promise<T
 }
 
 function catalog(fallback: string): ProviderCatalog {
-  return new ProviderCatalog({ config, bundledModelsDevPath: fallback, getApiKey: async () => undefined, backgroundTimeoutMs: 50 });
+  return new ProviderCatalog({
+    config,
+    gpt56ContextWindow: "canonical",
+    bundledModelsDevPath: fallback,
+    getApiKey: async () => undefined,
+    backgroundTimeoutMs: 50,
+  });
 }
 
 test("catalog load ignores malformed source snapshots", async () => {
@@ -71,7 +77,7 @@ test("metadata comparison ignores object key order", async () => {
     await instance.load();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request) => {
-      assert.equal(String(url), "https://models.dev/models.json");
+      assert.equal(String(url), "https://models.dev/api.json");
       return new Response(JSON.stringify({ "openai/fresh": { reasoning: true, name: "Fresh", id: "openai/fresh" } }), { status: 200 });
     }) as typeof fetch;
     try {
@@ -111,6 +117,7 @@ test("snapshot write failure preserves the in-memory CPA snapshot", async () => 
     await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }]);
     const instance = new ProviderCatalog({
       config,
+      gpt56ContextWindow: "canonical",
       bundledModelsDevPath: fallback,
       getApiKey: async () => undefined,
       writeSnapshot: async () => { throw new Error("disk full"); },

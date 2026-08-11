@@ -85,6 +85,77 @@ test("adds the full thinking map to every GPT-5.6 model family member", () => {
   }
 });
 
+test("routes GPT-5.6 family models through the Responses API", () => {
+  const result = buildProviderModels([
+    { id: "gpt-5.6" },
+    { id: "gpt-5.6-codex" },
+    { id: "0xdev/gpt-5.6-codex-mini" },
+    { id: "gpt-5.60" },
+    { id: "claude-opus-4-6" },
+  ], {}, {});
+
+  assert.deepEqual(result.models.map((model) => model.api), [
+    "openai-responses",
+    "openai-responses",
+    "openai-responses",
+    undefined,
+    undefined,
+  ]);
+});
+
+test("uses provider pricing while keeping the canonical GPT-5.6 context window by default", () => {
+  const providerCatalog = {
+    "openai/gpt-5.6-sol": {
+      id: "openai/gpt-5.6-sol",
+      limit: { context: 1050000, output: 128000 },
+      cost: {
+        input: 5,
+        output: 30,
+        cache_read: 0.5,
+        cache_write: 6.25,
+        tiers: [{
+          input: 10,
+          output: 45,
+          cache_read: 1,
+          cache_write: 12.5,
+          tier: { type: "context", size: 272000 },
+        }],
+      },
+    },
+    "routing-run/gpt-5.6-sol": {
+      id: "routing-run/gpt-5.6-sol",
+      limit: { context: 1000000, output: 128000 },
+      cost: { input: 2.5, output: 15 },
+    },
+  };
+  const result = buildProviderModels(
+    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
+    providerCatalog,
+    {},
+  );
+
+  assert.deepEqual(result.models[0].cost, {
+    input: 5,
+    output: 30,
+    cacheRead: 0.5,
+    cacheWrite: 6.25,
+    tiers: [{ inputTokensAbove: 272000, input: 10, output: 45, cacheRead: 1, cacheWrite: 12.5 }],
+  });
+  assert.equal(result.models[0].contextWindow, 272000);
+  assert.equal(result.models[0].maxTokens, 128000);
+  assert.equal(result.stats.matchMethods["owner-prefix"], 1);
+  assert.equal(result.stats.unmatched, 0);
+
+  const full = buildProviderModels(
+    [{ id: "gpt-5.6-sol", owned_by: "openai" }],
+    providerCatalog,
+    {},
+    "full",
+  );
+  assert.equal(full.models[0].contextWindow, 1050000);
+  assert.deepEqual(full.models[0].cost, result.models[0].cost);
+});
+
 test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   const result = buildProviderModels(
     [{ id: "custom-luna" }],
@@ -99,7 +170,9 @@ test("recognizes GPT-5.6 through a canonical metadata alias", () => {
   );
 
   assert.equal(result.models[0].reasoning, true);
+  assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+  assert.equal(result.models[0].contextWindow, 272000);
 });
 
 test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
@@ -108,4 +181,5 @@ test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
   assert.equal(result.models[0].reasoning, true);
   assert.equal(result.models[0].thinkingLevelMap?.off, "none");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+  assert.equal(result.models[0].contextWindow, 272000);
 });

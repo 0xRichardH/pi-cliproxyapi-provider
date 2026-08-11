@@ -8,6 +8,20 @@ export interface ProviderRegistration {
   config: ProviderConfig;
 }
 
+export function normalizeProviderModels(models: ProviderModelConfigLike[]): ProviderModelConfig[] {
+  return models.map((model) => ({
+    ...model,
+    // CLIProxyAPI accepts OpenAI-compatible function tools for both Chat
+    // Completions and Responses models, but Pi's strict all-properties-required
+    // rewrite destroys optional argument semantics for multi-mode extension
+    // tools. Keep each model's API selection and disable only that rewrite.
+    compat: {
+      ...model.compat,
+      supportsStrictMode: false,
+    },
+  })) as ProviderModelConfig[];
+}
+
 export function buildProviderRegistration(
   config: CpaProviderConfig,
   models: ProviderModelConfigLike[],
@@ -22,7 +36,7 @@ export function buildProviderRegistration(
       apiKey: config.authRequired ? "$CLIPROXYAPI_API_KEY" : "cliproxyapi-no-auth",
       authHeader: config.authRequired && config.authHeader,
       headers: Object.keys(config.headers).length > 0 ? config.headers : undefined,
-      models: models as ProviderModelConfig[],
+      models: normalizeProviderModels(models),
       refreshModels,
     },
   };

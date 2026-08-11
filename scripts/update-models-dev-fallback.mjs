@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { normalizeModelsDevCatalog, validateCatalogSize } from "./models-dev-catalog.mjs";
 
-const MODELS_DEV_URL = "https://models.dev/models.json";
+const MODELS_DEV_URL = "https://models.dev/api.json";
 const fallbackPath = resolve("data/models-dev-fallback.json");
 const { values } = parseArgs({ options: { check: { type: "boolean", default: false } } });
 

@@ -47,12 +47,31 @@ test("matches by normalized suffix when capitalization differs", () => {
   assert.equal(match?.method, "normalized-suffix");
 });
 
-test("returns undefined for ambiguous or unknown model IDs", () => {
+test("uses a canonical owner to resolve otherwise ambiguous model IDs", () => {
   const ambiguous = {
     ...catalog,
     "other/gpt-5.5": { id: "other/gpt-5.5", name: "Other GPT-5.5" }
   };
 
   assert.equal(findMetadataMatch({ id: "gpt-5.5", owned_by: "router" }, ambiguous, {}), undefined);
+  const match = findMetadataMatch({ id: "gpt-5.5", owned_by: "openai" }, ambiguous, {});
+  assert.equal(match?.metadataId, "openai/gpt-5.5");
+  assert.equal(match?.method, "owner-prefix");
   assert.equal(findMetadataMatch({ id: "unknown-model", owned_by: "router" }, catalog, {}), undefined);
+});
+
+test("allows an explicit alias to override a canonical owner match", () => {
+  const ambiguous = {
+    ...catalog,
+    "other/gpt-5.5": { id: "other/gpt-5.5", name: "Other GPT-5.5" }
+  };
+
+  const match = findMetadataMatch(
+    { id: "gpt-5.5", owned_by: "openai" },
+    ambiguous,
+    { "gpt-5.5": "other/gpt-5.5" },
+  );
+
+  assert.equal(match?.metadataId, "other/gpt-5.5");
+  assert.equal(match?.method, "alias");
 });
