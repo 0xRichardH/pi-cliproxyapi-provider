@@ -1,13 +1,20 @@
 import { DynamicBorder, getSettingsListTheme, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, type SettingItem, SettingsList, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { saveModelOverride } from "./config.ts";
+import {
+  CONTEXT_WINDOW_PRESETS,
+  loadModelOverrideLayers,
+  MAX_TOKEN_PRESETS,
+  saveModelOverride,
+} from "./config.ts";
 import type { ProviderCatalog } from "./catalog.ts";
 import { normalizeProviderModels } from "./registration.ts";
 import { saveProviderSettings, type ProviderSettings } from "./settings.ts";
-import type { CpaProviderConfig, ProviderModelConfigLike, ProviderModelOverride } from "./types.ts";
-
-const CONTEXT_PRESETS = [128000, 272000, 512000, 1000000];
-const OUTPUT_PRESETS = [4096, 8192, 16384, 32768, 65536, 128000];
+import type {
+  CpaProviderConfig,
+  ProviderModelConfigLike,
+  ProviderModelOverride,
+  ProviderModelOverrideLayer,
+} from "./types.ts";
 
 function modelOverride(model: ProviderModelConfigLike, overrides: Record<string, ProviderModelOverride>): ProviderModelOverride {
   return overrides[model.id] ?? {};
@@ -17,16 +24,16 @@ function valuesFor(current: number, presets: number[]): string[] {
   return ["auto", ...new Set([current, ...presets]).values()].map(String);
 }
 
-function effectiveReasoning(model: ProviderModelConfigLike, override: ProviderModelOverride): boolean {
-  return override.reasoning ?? model.reasoning;
+function effectiveReasoning(model: ProviderModelConfigLike, override: ProviderModelOverrideLayer): boolean {
+  return typeof override.reasoning === "boolean" ? override.reasoning : model.reasoning;
 }
 
 function effectiveNumber(
   model: ProviderModelConfigLike,
-  override: ProviderModelOverride,
+  override: ProviderModelOverrideLayer,
   field: "contextWindow" | "maxTokens",
 ): number {
-  return override[field] ?? model[field];
+  return typeof override[field] === "number" ? override[field] : model[field];
 }
 
 function strictModeLabel(model: ProviderModelConfigLike): string {
@@ -39,7 +46,7 @@ function formattedOtherCompat(model: ProviderModelConfigLike): string {
   return entries.length === 0 ? "none" : entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
 }
 
-function detailItems(model: ProviderModelConfigLike, override: ProviderModelOverride): SettingItem[] {
+function detailItems(model: ProviderModelConfigLike, override: ProviderModelOverrideLayer): SettingItem[] {
   const reasoning = effectiveReasoning(model, override);
   const contextWindow = effectiveNumber(model, override, "contextWindow");
   const maxTokens = effectiveNumber(model, override, "maxTokens");
@@ -48,22 +55,22 @@ function detailItems(model: ProviderModelConfigLike, override: ProviderModelOver
       id: "reasoning",
       label: "Reasoning",
       description: `Effective: ${reasoning ? "on" : "off"}. ${override.reasoning === undefined ? "Metadata/capability default." : "User override."}`,
-      currentValue: override.reasoning === undefined ? "auto" : override.reasoning ? "on" : "off",
+      currentValue: typeof override.reasoning !== "boolean" ? "auto" : override.reasoning ? "on" : "off",
       values: ["auto", "on", "off"],
     },
     {
       id: "contextWindow",
       label: "Context window",
       description: `Effective: ${contextWindow} tokens. ${override.contextWindow === undefined ? "Derived default." : "User override."}`,
-      currentValue: override.contextWindow === undefined ? "auto" : String(override.contextWindow),
-      values: valuesFor(contextWindow, CONTEXT_PRESETS),
+      currentValue: typeof override.contextWindow !== "number" ? "auto" : String(override.contextWindow),
+      values: valuesFor(contextWindow, [...CONTEXT_WINDOW_PRESETS]),
     },
     {
       id: "maxTokens",
       label: "Max output tokens",
       description: `Effective: ${maxTokens} tokens. ${override.maxTokens === undefined ? "Derived default." : "User override."}`,
-      currentValue: override.maxTokens === undefined ? "auto" : String(override.maxTokens),
-      values: valuesFor(maxTokens, OUTPUT_PRESETS),
+      currentValue: typeof override.maxTokens !== "number" ? "auto" : String(override.maxTokens),
+      values: valuesFor(maxTokens, [...MAX_TOKEN_PRESETS]),
     },
   ];
 }
@@ -162,8 +169,8 @@ export async function openProviderConfig(
   settings: ProviderSettings,
   connection: CpaProviderConfig,
 ): Promise<"connection" | undefined> {
-  if (!ctx.hasUI) {
-    ctx.ui.notify("/cliproxyapi config requires an interactive UI.", "warning");
+  if (ctx.mode !== "tui") {
+    ctx.ui.notify("/cliproxyapi config requires interactive TUI mode.", "warning");
     return;
   }
 
@@ -245,8 +252,8 @@ export async function openModelInspector(
   overrides: Record<string, ProviderModelOverride>,
   showStrictMode: boolean,
 ): Promise<void> {
-  if (!ctx.hasUI) {
-    ctx.ui.notify("/cliproxyapi models requires an interactive UI.", "warning");
+  if (ctx.mode !== "tui") {
+    ctx.ui.notify("/cliproxyapi models requires interactive TUI mode.", "warning");
     return;
   }
 
@@ -284,8 +291,14 @@ export async function openModelInspector(
 
   const model = models.find((candidate) => candidate.id === selectedId);
   if (!model) return;
-  const original = modelOverride(model, overrides);
-  const edited = { ...original };
+  const layers = loadModelOverrideLayers(ctx.cwd);
+  const globalOverride = layers.global[model.id] ?? {};
+  const original: ProviderModelOverrideLayer = layers.project[model.id] ?? {};
+  const edited: ProviderModelOverrideLayer = { ...original };
+  const selectAuto = (field: keyof ProviderModelOverrideLayer) => {
+    if (globalOverride[field] === undefined) delete edited[field];
+    else edited[field] = null;
+  };
 
   await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
     const container = new Container();
@@ -296,15 +309,15 @@ export async function openModelInspector(
 
     const onChange = (id: string, value: string) => {
       if (id === "reasoning") {
-        if (value === "auto") delete edited.reasoning;
+        if (value === "auto") selectAuto("reasoning");
         else edited.reasoning = value === "on";
       }
       if (id === "contextWindow") {
-        if (value === "auto") delete edited.contextWindow;
+        if (value === "auto") selectAuto("contextWindow");
         else edited.contextWindow = Number(value);
       }
       if (id === "maxTokens") {
-        if (value === "auto") delete edited.maxTokens;
+        if (value === "auto") selectAuto("maxTokens");
         else edited.maxTokens = Number(value);
       }
       list.updateValue(id, value);

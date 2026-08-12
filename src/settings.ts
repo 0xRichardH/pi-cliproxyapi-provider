@@ -1,4 +1,4 @@
-import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -50,7 +50,7 @@ export function loadProviderSettings(cwd: string, agentDir?: string): ProviderSe
 }
 
 function settingsPath(cwd: string): string {
-  const projectPath = join(cwd, ".pi", "settings.json");
+  const projectPath = join(cwd, CONFIG_DIR_NAME, "settings.json");
   return existsSync(projectPath) ? projectPath : join(getAgentDir(), "settings.json");
 }
 

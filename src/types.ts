@@ -9,7 +9,14 @@ export interface ProviderModelOverride {
   maxTokens?: number;
 }
 
+export interface ProviderModelOverrideLayer {
+  reasoning?: boolean | null;
+  contextWindow?: number | null;
+  maxTokens?: number | null;
+}
+
 export type ProviderModelOverrides = Record<string, ProviderModelOverride>;
+export type ProviderModelOverrideLayers = Record<string, ProviderModelOverrideLayer>;
 
 export interface CpaProviderConfig {
   providerName: string;

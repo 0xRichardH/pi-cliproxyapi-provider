@@ -46,11 +46,50 @@ test("models reports its TUI requirement instead of being treated as an unknown 
   await command.handler("models", {
     cwd: process.cwd(),
     hasUI: false,
+    mode: "json",
     ui: { notify: (message: string, level: string) => notifications.push({ message, level }) },
   } as any);
 
   assert.equal(notifications[0].level, "warning");
-  assert.match(notifications[0].message, /requires an interactive UI/);
+  assert.match(notifications[0].message, /requires interactive TUI mode/);
+});
+
+test("models rejects RPC mode even when UI notifications are available", async () => {
+  let command: any;
+  registerCliproxyapiCommand({
+    registerCommand: (_name: string, definition: any) => { command = definition; },
+  } as any, {} as any, {
+    current: () => { throw new Error("catalog should not load outside TUI mode"); },
+  } as any);
+  const notifications: Array<{ message: string; level: string }> = [];
+
+  await command.handler("models", {
+    cwd: process.cwd(),
+    hasUI: true,
+    mode: "rpc",
+    ui: { notify: (message: string, level: string) => notifications.push({ message, level }) },
+  } as any);
+
+  assert.equal(notifications[0].level, "warning");
+  assert.match(notifications[0].message, /requires interactive TUI mode/);
+});
+
+test("config rejects RPC mode even when UI notifications are available", async () => {
+  let command: any;
+  registerCliproxyapiCommand({
+    registerCommand: (_name: string, definition: any) => { command = definition; },
+  } as any);
+  const notifications: Array<{ message: string; level: string }> = [];
+
+  await command.handler("config", {
+    cwd: process.cwd(),
+    hasUI: true,
+    mode: "rpc",
+    ui: { notify: (message: string, level: string) => notifications.push({ message, level }) },
+  } as any);
+
+  assert.equal(notifications[0].level, "warning");
+  assert.match(notifications[0].message, /requires interactive TUI mode/);
 });
 
 test("an empty command shows help", async () => {
