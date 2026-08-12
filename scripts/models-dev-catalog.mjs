@@ -16,12 +16,7 @@ export function normalizeModelsDevCatalog(payload) {
       continue;
     }
     if (typeof value.id === "string") {
-      const inferredProvider = key.includes("/") ? key.split("/")[0] : undefined;
-      catalog[key] = {
-        ...value,
-        id: value.id.includes("/") ? value.id : key,
-        ...(inferredProvider ? { sourceProvider: inferredProvider } : {}),
-      };
+      catalog[key] = { ...value, id: value.id.includes("/") ? value.id : key };
     }
   }
 

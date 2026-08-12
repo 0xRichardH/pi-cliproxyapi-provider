@@ -65,6 +65,14 @@ test("allows metadata fallback provider overrides and disabling", () => {
     null,
   );
   assert.equal(
+    mergeConfigLayers({ metadataFallbackProvider: "NoNe" }, undefined, {}).metadataFallbackProvider,
+    null,
+  );
+  assert.equal(
+    mergeConfigLayers(undefined, { metadataFallbackProvider: "none" }, {}).metadataFallbackProvider,
+    null,
+  );
+  assert.equal(
     mergeConfigLayers(undefined, undefined, { CLIPROXYAPI_METADATA_FALLBACK_PROVIDER: "none" }).metadataFallbackProvider,
     null,
   );

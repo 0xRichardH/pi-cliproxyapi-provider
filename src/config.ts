@@ -50,10 +50,15 @@ export function parseBooleanEnv(value: string | undefined): boolean | undefined 
   return undefined;
 }
 
+function normalizeMetadataFallbackProvider(value: string | null): string | null {
+  return value?.trim().toLowerCase() === "none" ? null : value;
+}
+
 function normalizeConfig(config: CpaProviderConfig): CpaProviderConfig {
   return {
     ...config,
     authHeader: config.authRequired ? config.authHeader : false,
+    metadataFallbackProvider: normalizeMetadataFallbackProvider(config.metadataFallbackProvider),
   };
 }
 
@@ -132,9 +137,7 @@ function envLayer(env: NodeJS.ProcessEnv): ConfigLayer {
     ...(authRequired !== undefined ? { authRequired } : {}),
     ...(authHeader !== undefined ? { authHeader } : {}),
     ...(modelsDevEnabled !== undefined ? { modelsDevEnabled } : {}),
-    ...(metadataFallbackProvider
-      ? { metadataFallbackProvider: metadataFallbackProvider.toLowerCase() === "none" ? null : metadataFallbackProvider }
-      : {}),
+    ...(metadataFallbackProvider ? { metadataFallbackProvider } : {}),
   };
 }
 

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ProviderCatalog } from "../src/catalog.ts";
-import { cpaModelsCachePath } from "../src/discovery.ts";
+import { cpaModelsCachePath, modelsDevCachePath } from "../src/discovery.ts";
 import { writeCache } from "../src/cache.ts";
 import type { CpaProviderConfig } from "../src/types.ts";
 
@@ -73,6 +73,63 @@ test("catalog load is cache-first and performs no network request", async () => 
   });
 });
 
+test("loads bundled provider-qualified metadata for first-run fallback matching", async () => {
+  await withTempHome(async (_home, fallback) => {
+    await writeFile(fallback, JSON.stringify({
+      openrouter: {
+        models: {
+          "minimax/minimax-m3": {
+            id: "minimax/minimax-m3",
+            name: "MiniMax-M3",
+            reasoning: true,
+          },
+        },
+      },
+      other: {
+        models: {
+          "minimax/minimax-m3": { id: "minimax/minimax-m3", reasoning: true },
+        },
+      },
+    }));
+    await writeCache(cpaModelsCachePath(config), [{ id: "minimax-m3", owned_by: "ken-team-litellm" }]);
+
+    const snapshot = await catalog(fallback).load();
+
+    assert.equal(snapshot.metadataSource, "bundled");
+    assert.equal(snapshot.built.models[0].name, "MiniMax-M3");
+    assert.equal(snapshot.built.models[0].reasoning, true);
+    assert.equal(snapshot.built.stats.matchMethods["provider-fallback"], 1);
+  });
+});
+
+test("ignores legacy flat metadata caches and falls back to bundled metadata", async () => {
+  await withTempHome(async (_home, fallback) => {
+    await writeFile(fallback, JSON.stringify({
+      openrouter: {
+        models: {
+          "minimax/minimax-m3": { id: "minimax/minimax-m3", name: "Bundled MiniMax", reasoning: true },
+        },
+      },
+      other: {
+        models: {
+          "minimax/minimax-m3": { id: "minimax/minimax-m3", name: "Other MiniMax", reasoning: true },
+        },
+      },
+    }));
+    await writeCache(modelsDevCachePath(), {
+      "minimax/minimax-m3": { id: "minimax/minimax-m3", name: "Legacy MiniMax", reasoning: true },
+    }, 1234);
+    await writeCache(cpaModelsCachePath(config), [{ id: "minimax-m3", owned_by: "ken-team-litellm" }]);
+
+    const snapshot = await catalog(fallback).load();
+
+    assert.equal(snapshot.metadataSource, "bundled");
+    assert.equal(snapshot.metadataUpdatedAt, undefined);
+    assert.equal(snapshot.built.models[0].name, "Bundled MiniMax");
+    assert.equal(snapshot.built.stats.matchMethods["provider-fallback"], 1);
+  });
+});
+
 test("metadata comparison ignores object key order", async () => {
   await withTempHome(async (_home, fallback) => {
     const instance = catalog(fallback);
@@ -80,7 +137,9 @@ test("metadata comparison ignores object key order", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request) => {
       assert.equal(String(url), "https://models.dev/api.json");
-      return new Response(JSON.stringify({ "openai/fresh": { reasoning: true, name: "Fresh", id: "openai/fresh" } }), { status: 200 });
+      return new Response(JSON.stringify({
+        openai: { models: { fresh: { reasoning: true, name: "Fresh", id: "fresh" } } },
+      }), { status: 200 });
     }) as typeof fetch;
     try {
       const result = await instance.refresh("metadata", "manual");

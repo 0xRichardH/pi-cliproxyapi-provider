@@ -29,8 +29,7 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
     }
 
     if (isMetadata(value)) {
-      const inferredProvider = key.includes("/") ? key.split("/")[0] : undefined;
-      catalog[key] = inferredProvider ? { ...value, sourceProvider: inferredProvider } : value;
+      catalog[key] = value;
     }
   }
 
@@ -48,6 +47,10 @@ export async function fetchModelsDevCatalog(timeoutMs?: number, signal?: AbortSi
     }
     return parseModelsDevCatalog(await response.json());
   }, timeoutMs, "models.dev fetch", signal);
+}
+
+export function hasSourceProviderMetadata(catalog: ModelsDevCatalog): boolean {
+  return Object.values(catalog).every((metadata) => typeof metadata.sourceProvider === "string");
 }
 
 export async function readBundledModelsDevFallback(path: string): Promise<ModelsDevCatalog> {
