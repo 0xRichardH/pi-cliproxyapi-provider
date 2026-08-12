@@ -11,6 +11,7 @@ const config: CpaProviderConfig = {
   headers: {},
   modelsDevEnabled: true,
   modelAliases: {},
+  modelOverrides: {},
 };
 
 function refreshContext(overrides: Record<string, unknown> = {}): any {

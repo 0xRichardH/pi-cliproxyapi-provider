@@ -228,6 +228,7 @@ export class ProviderCatalog {
         metadata,
         this.options.config.modelAliases,
         this.options.gpt56ContextWindow,
+        this.options.config.modelOverrides,
       ),
     };
     return this.snapshot;

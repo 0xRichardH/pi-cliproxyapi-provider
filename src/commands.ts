@@ -2,6 +2,8 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { DEFAULT_CONFIG, loadConfig, globalConfigPath, readConfigFile, writeConfigFile, type ConfigLayer } from "./config.ts";
 import type { ProviderCatalog, CatalogSnapshot, RefreshTarget, SourceRefreshResult } from "./catalog.ts";
 import type { ProviderRuntime } from "./runtime.ts";
+import { openModelInspector, openProviderConfig } from "./model-ui.ts";
+import { loadProviderSettings } from "./settings.ts";
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -43,7 +45,7 @@ function capabilityCount(snapshot: CatalogSnapshot, key: "reasoning" | "image"):
 
 export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
   if (!ctx.hasUI) {
-    ctx.ui.notify("/cliproxyapi config requires an interactive UI.", "warning");
+    ctx.ui.notify("/cliproxyapi config connection requires an interactive UI.", "warning");
     return;
   }
 
@@ -81,6 +83,7 @@ export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
     : false;
 
   writeConfigFile(path, {
+    ...existing,
     providerName: providerNameInput || defaults.providerName,
     baseUrl: baseUrlInput || defaults.baseUrl,
     authRequired,
@@ -117,8 +120,21 @@ function parseRefreshTarget(value: string | undefined): RefreshTarget | undefine
   return undefined;
 }
 
+const CLIPROXYAPI_HELP = [
+  "CLIProxyAPI provider commands:",
+  "  /cliproxyapi status            Show provider and model-catalog status",
+  "  /cliproxyapi refresh           Refresh CPA models and models.dev metadata",
+  "  /cliproxyapi refresh models    Refresh CPA models only",
+  "  /cliproxyapi refresh metadata  Refresh models.dev metadata only",
+  "  /cliproxyapi aliases           Show unmatched model IDs for alias configuration",
+  "  /cliproxyapi models            Inspect models and set bounded overrides",
+  "  /cliproxyapi config            Configure model behavior and display",
+  "  /cliproxyapi config connection Configure provider endpoint and auth",
+  "  /cliproxyapi help              Show this help",
+].join("\n");
+
 export function cliproxyapiArgumentCompletions(prefix: string): Array<{ value: string; label: string }> {
-  return ["config", "status", "refresh", "refresh models", "refresh metadata", "aliases", "help"]
+  return ["config", "config connection", "status", "refresh", "refresh models", "refresh metadata", "aliases", "models", "help"]
     .filter((item) => item.startsWith(prefix))
     .map((value) => ({ value, label: value }));
 }
@@ -130,8 +146,26 @@ export function registerCliproxyapiCommand(pi: ExtensionAPI, runtime?: ProviderR
       return cliproxyapiArgumentCompletions(prefix);
     },
     async handler(args, ctx) {
-      const [subcommand = "help", option] = args.trim().split(/\s+/);
-      if (subcommand === "config") return runConfig(ctx);
+      const commandArgs = args.trim();
+      const [subcommand, option] = commandArgs ? commandArgs.split(/\s+/) : ["help"];
+      if (subcommand === "help") {
+        ctx.ui.notify(CLIPROXYAPI_HELP, "info");
+        return;
+      }
+      if (subcommand === "config") {
+        if (option === "connection") return runConfig(ctx);
+        if (option) {
+          ctx.ui.notify("Usage: /cliproxyapi config [connection]", "warning");
+          return;
+        }
+        const action = await openProviderConfig(ctx, loadProviderSettings(ctx.cwd), loadConfig(ctx.cwd));
+        if (action === "connection") return runConfig(ctx);
+        return;
+      }
+      if (!["status", "refresh", "aliases", "models"].includes(subcommand)) {
+        ctx.ui.notify(`${CLIPROXYAPI_HELP}\n\nUnknown command: ${subcommand}`, "warning");
+        return;
+      }
       if (!runtime || !catalog) {
         ctx.ui.notify("CLIProxyAPI provider is unavailable. Run /cliproxyapi config and reload pi.", "error");
         return;
@@ -170,7 +204,10 @@ export function registerCliproxyapiCommand(pi: ExtensionAPI, runtime?: ProviderR
         ctx.ui.notify(body, snapshot.built.stats.unmatched ? "warning" : "info");
         return;
       }
-      ctx.ui.notify("Usage: /cliproxyapi config|status|refresh [models|metadata]|aliases", "info");
+      if (subcommand === "models") {
+        await openModelInspector(ctx, catalog, config.modelOverrides, loadProviderSettings(ctx.cwd).showStrictMode);
+        return;
+      }
     },
   });
 }

@@ -183,3 +183,25 @@ test("adds GPT-5.6 capabilities even when metadata is unavailable", () => {
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
   assert.equal(result.models[0].contextWindow, 272000);
 });
+
+test("applies bounded user overrides without changing forced model API selection", () => {
+  const result = buildProviderModels(
+    [{ id: "gpt-5.6-codex" }],
+    {},
+    {},
+    "canonical",
+    {
+      "gpt-5.6-codex": {
+        reasoning: false,
+        contextWindow: 512000,
+        maxTokens: 32768,
+      },
+    },
+  );
+
+  assert.equal(result.models[0].reasoning, false);
+  assert.equal(result.models[0].contextWindow, 512000);
+  assert.equal(result.models[0].maxTokens, 32768);
+  assert.equal(result.models[0].api, "openai-responses");
+  assert.equal(result.models[0].thinkingLevelMap?.max, "max");
+});

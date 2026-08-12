@@ -16,6 +16,7 @@ const config: CpaProviderConfig = {
   headers: {},
   modelsDevEnabled: true,
   modelAliases: {},
+  modelOverrides: {},
 };
 
 async function withTempHome<T>(fn: (home: string, fallback: string) => Promise<T>): Promise<T> {

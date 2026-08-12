@@ -42,7 +42,8 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.84.0",
-    "@earendil-works/pi-coding-agent": ">=0.84.0"
+    "@earendil-works/pi-coding-agent": ">=0.84.0",
+    "@earendil-works/pi-tui": ">=0.84.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -50,11 +51,15 @@
     },
     "@earendil-works/pi-ai": {
       "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "0.84.1",
     "@earendil-works/pi-coding-agent": "0.84.1",
+    "@earendil-works/pi-tui": "0.84.1",
     "typescript": "^5.9.3"
   }
 }

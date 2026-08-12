@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { CpaProviderConfig } from "./types.ts";
+import type { CpaProviderConfig, ProviderModelOverride, ProviderModelOverrides } from "./types.ts";
 
 export type ConfigLayer = Partial<CpaProviderConfig>;
 
@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: CpaProviderConfig = {
   headers: {},
   modelsDevEnabled: true,
   modelAliases: {},
+  modelOverrides: {},
 };
 
 export function globalConfigPath(): string {
@@ -50,7 +51,20 @@ function safeProjectConfig(projectConfig?: ConfigLayer): ConfigLayer | undefined
   if (!projectConfig) return undefined;
   return {
     ...(projectConfig.modelAliases !== undefined ? { modelAliases: projectConfig.modelAliases } : {}),
+    ...(projectConfig.modelOverrides !== undefined ? { modelOverrides: projectConfig.modelOverrides } : {}),
   };
+}
+
+function mergeModelOverrides(
+  base: ProviderModelOverrides,
+  layer: ProviderModelOverrides | undefined,
+): ProviderModelOverrides {
+  if (!layer) return base;
+  const merged = { ...base };
+  for (const [modelId, override] of Object.entries(layer)) {
+    merged[modelId] = { ...merged[modelId], ...override };
+  }
+  return merged;
 }
 
 function projectConfigLayer(value: unknown, path: string): ConfigLayer {
@@ -62,8 +76,11 @@ function projectConfigLayer(value: unknown, path: string): ConfigLayer {
   if (record.modelAliases !== undefined && !isStringMap(record.modelAliases)) {
     throw new Error(`modelAliases must be an object with string values in project config file: ${path}`);
   }
+  const modelOverrides = record.modelOverrides === undefined
+    ? undefined
+    : parseModelOverrides(record.modelOverrides, "project");
 
-  return safeProjectConfig(record as ConfigLayer) ?? {};
+  return safeProjectConfig({ ...record, ...(modelOverrides ? { modelOverrides } : {}) } as ConfigLayer) ?? {};
 }
 
 function mergeLayer(base: CpaProviderConfig, layer?: ConfigLayer): CpaProviderConfig {
@@ -73,6 +90,7 @@ function mergeLayer(base: CpaProviderConfig, layer?: ConfigLayer): CpaProviderCo
     ...layer,
     headers: { ...base.headers, ...(layer.headers ?? {}) },
     modelAliases: { ...base.modelAliases, ...(layer.modelAliases ?? {}) },
+    modelOverrides: mergeModelOverrides(base.modelOverrides, layer.modelOverrides),
   };
 }
 
@@ -105,6 +123,47 @@ function isStringMap(value: unknown): value is Record<string, string> {
     && Object.values(value).every((entry) => typeof entry === "string");
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function parseModelOverrides(value: unknown, scope: string): ProviderModelOverrides {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`modelOverrides must be an object in ${scope} config file`);
+  }
+
+  const parsed: ProviderModelOverrides = {};
+  for (const [modelId, rawOverride] of Object.entries(value)) {
+    if (!modelId.trim()) throw new Error(`modelOverrides keys must be non-empty model IDs in ${scope} config file`);
+    if (!rawOverride || typeof rawOverride !== "object" || Array.isArray(rawOverride)) {
+      throw new Error(`modelOverrides.${modelId} must be an object in ${scope} config file`);
+    }
+
+    const record = rawOverride as Record<string, unknown>;
+    const unknown = Object.keys(record).filter(
+      (key) => key !== "reasoning" && key !== "contextWindow" && key !== "maxTokens",
+    );
+    if (unknown.length > 0) {
+      throw new Error(`modelOverrides.${modelId} contains unsupported fields: ${unknown.join(", ")}`);
+    }
+    if (record.reasoning !== undefined && typeof record.reasoning !== "boolean") {
+      throw new Error(`modelOverrides.${modelId}.reasoning must be a boolean in ${scope} config file`);
+    }
+    for (const field of ["contextWindow", "maxTokens"] as const) {
+      if (record[field] !== undefined && !isPositiveInteger(record[field])) {
+        throw new Error(`modelOverrides.${modelId}.${field} must be a positive integer in ${scope} config file`);
+      }
+    }
+
+    parsed[modelId] = {
+      ...(record.reasoning !== undefined ? { reasoning: record.reasoning } : {}),
+      ...(record.contextWindow !== undefined ? { contextWindow: record.contextWindow as number } : {}),
+      ...(record.maxTokens !== undefined ? { maxTokens: record.maxTokens as number } : {}),
+    } satisfies ProviderModelOverride;
+  }
+  return parsed;
+}
+
 function validateConfigLayer(value: unknown, path: string): ConfigLayer {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Config file must contain a JSON object: ${path}`);
@@ -131,8 +190,11 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
   if (record.modelAliases !== undefined && !isStringMap(record.modelAliases)) {
     throw new Error(`modelAliases must be an object with string values in config file: ${path}`);
   }
+  const modelOverrides = record.modelOverrides === undefined
+    ? undefined
+    : parseModelOverrides(record.modelOverrides, "global");
 
-  return record as ConfigLayer;
+  return { ...record, ...(modelOverrides ? { modelOverrides } : {}) } as ConfigLayer;
 }
 
 export function readConfigFile(path: string): ConfigLayer | undefined {
@@ -152,4 +214,34 @@ export function loadConfig(cwd: string, env: NodeJS.ProcessEnv = process.env): C
 export function writeConfigFile(path: string, config: ConfigLayer): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+function editableConfigPath(cwd: string): string {
+  const projectPath = projectConfigPath(cwd);
+  return existsSync(projectPath) ? projectPath : globalConfigPath();
+}
+
+export function saveModelOverride(
+  cwd: string,
+  modelId: string,
+  override: ProviderModelOverride,
+): { path: string; overrides: ProviderModelOverrides } {
+  const path = editableConfigPath(cwd);
+  let raw: Record<string, unknown> = {};
+  if (existsSync(path)) {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Config file must contain a JSON object: ${path}`);
+    }
+    raw = parsed as Record<string, unknown>;
+  }
+
+  const existing = raw.modelOverrides === undefined
+    ? {}
+    : parseModelOverrides(raw.modelOverrides, path === globalConfigPath() ? "global" : "project");
+  const next = { ...existing };
+  if (Object.keys(override).length === 0) delete next[modelId];
+  else next[modelId] = override;
+  writeConfigFile(path, { ...raw, modelOverrides: next } as ConfigLayer);
+  return { path, overrides: next };
 }

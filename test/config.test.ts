@@ -7,8 +7,18 @@ import { join } from "node:path";
 
 test("merges defaults, global config, project config, and environment overrides", () => {
   const config = mergeConfigLayers(
-    { baseUrl: "http://global.example/v1", providerName: "global", modelAliases: { a: "openai/a" } },
-    { providerName: "project", modelAliases: { b: "openai/b" }, authRequired: false },
+    {
+      baseUrl: "http://global.example/v1",
+      providerName: "global",
+      modelAliases: { a: "openai/a" },
+      modelOverrides: { a: { reasoning: false, contextWindow: 128000 } },
+    },
+    {
+      providerName: "project",
+      modelAliases: { b: "openai/b" },
+      modelOverrides: { a: { contextWindow: 272000 }, b: { maxTokens: 32768 } },
+      authRequired: false,
+    },
     {
       CLIPROXYAPI_BASE_URL: "http://env.example/v1",
       CLIPROXYAPI_PROVIDER_NAME: "env-provider",
@@ -21,6 +31,10 @@ test("merges defaults, global config, project config, and environment overrides"
   assert.equal(config.authRequired, true);
   assert.equal(config.authHeader, false);
   assert.deepEqual(config.modelAliases, { a: "openai/a", b: "openai/b" });
+  assert.deepEqual(config.modelOverrides, {
+    a: { reasoning: false, contextWindow: 272000 },
+    b: { maxTokens: 32768 },
+  });
 });
 
 test("uses safe default config", () => {
@@ -30,6 +44,7 @@ test("uses safe default config", () => {
   assert.equal(config.baseUrl, DEFAULT_CONFIG.baseUrl);
   assert.equal(config.authRequired, true);
   assert.equal(config.authHeader, true);
+  assert.deepEqual(config.modelOverrides, {});
 });
 
 test("normalizes authHeader off when authRequired is false", () => {
@@ -49,6 +64,7 @@ test("ignores project connection and auth fields", () => {
       authHeader: false,
       headers: { Authorization: "Bearer leaked" },
       modelAliases: { local: "openai/local" },
+      modelOverrides: { local: { reasoning: true, maxTokens: 8192 } },
     },
     {}
   );
@@ -59,6 +75,7 @@ test("ignores project connection and auth fields", () => {
   assert.equal(config.authHeader, true);
   assert.deepEqual(config.headers, { "X-Global": "yes" });
   assert.deepEqual(config.modelAliases, { local: "openai/local" });
+  assert.deepEqual(config.modelOverrides, { local: { reasoning: true, maxTokens: 8192 } });
 });
 
 test("project config reader ignores unsupported malformed fields", async () => {
@@ -70,12 +87,32 @@ test("project config reader ignores unsupported malformed fields", async () => {
       baseUrl: 123,
       headers: null,
       modelAliases: { local: "openai/local" },
+      modelOverrides: { local: { contextWindow: 272000 } },
     }));
 
     const config = mergeConfigLayers(undefined, readProjectConfigFile(path), {});
 
     assert.deepEqual(config.modelAliases, { local: "openai/local" });
+    assert.deepEqual(config.modelOverrides, { local: { contextWindow: 272000 } });
     assert.equal(config.baseUrl, DEFAULT_CONFIG.baseUrl);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rejects unsafe or malformed model overrides", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-cpa-config-overrides-invalid-"));
+  const path = join(dir, "config.json");
+
+  try {
+    for (const modelOverrides of [
+      { model: { api: "openai-completions" } },
+      { model: { contextWindow: 0 } },
+      { model: { reasoning: "yes" } },
+    ]) {
+      await writeFile(path, JSON.stringify({ modelOverrides }));
+      assert.throws(() => readConfigFile(path), /modelOverrides\.model/);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
