@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeConfigLayers, DEFAULT_CONFIG, readConfigFile, readProjectConfigFile } from "../src/config.ts";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  mergeConfigLayers,
+  DEFAULT_CONFIG,
+  projectConfigPath,
+  readConfigFile,
+  readProjectConfigFile,
+  saveModelOverride,
+} from "../src/config.ts";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -108,6 +115,8 @@ test("rejects unsafe or malformed model overrides", async () => {
     for (const modelOverrides of [
       { model: { api: "openai-completions" } },
       { model: { contextWindow: 0 } },
+      { model: { contextWindow: 999999999999 } },
+      { model: { maxTokens: 1 } },
       { model: { reasoning: "yes" } },
     ]) {
       await writeFile(path, JSON.stringify({ modelOverrides }));
@@ -115,6 +124,41 @@ test("rejects unsafe or malformed model overrides", async () => {
     }
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("project null overrides restore catalog defaults instead of inherited globals", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-cpa-project-tombstones-"));
+  const path = join(dir, "config.json");
+  try {
+    await writeFile(path, JSON.stringify({
+      modelOverrides: { model: { reasoning: null, contextWindow: null, maxTokens: 65536 } },
+    }));
+    const config = mergeConfigLayers(
+      { modelOverrides: { model: { reasoning: true, contextWindow: 272000, maxTokens: 32768 } } },
+      readProjectConfigFile(path),
+      {},
+    );
+
+    assert.deepEqual(config.modelOverrides, { model: { maxTokens: 65536 } });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("model override saves target the project layer and preserve global provenance", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "pi-cpa-save-override-"));
+  try {
+    const path = projectConfigPath(cwd);
+    await mkdir(join(cwd, ".pi", "pi-cliproxyapi-provider"), { recursive: true });
+    saveModelOverride(cwd, "model", { contextWindow: null, maxTokens: 65536 });
+
+    assert.equal(path, projectConfigPath(cwd));
+    assert.deepEqual(readProjectConfigFile(path)?.modelOverrides, {
+      model: { contextWindow: null, maxTokens: 65536 },
+    });
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
   }
 });
 
