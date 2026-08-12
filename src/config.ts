@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG: CpaProviderConfig = {
   authHeader: true,
   headers: {},
   modelsDevEnabled: true,
+  metadataFallbackProvider: "openrouter",
   modelAliases: {},
   modelOverrides: {},
 };
@@ -59,6 +60,9 @@ function normalizeConfig(config: CpaProviderConfig): CpaProviderConfig {
 function safeProjectConfig(projectConfig?: ConfigLayer): ConfigLayer | undefined {
   if (!projectConfig) return undefined;
   return {
+    ...(projectConfig.metadataFallbackProvider !== undefined
+      ? { metadataFallbackProvider: projectConfig.metadataFallbackProvider }
+      : {}),
     ...(projectConfig.modelAliases !== undefined ? { modelAliases: projectConfig.modelAliases } : {}),
     ...(projectConfig.modelOverrides !== undefined ? { modelOverrides: projectConfig.modelOverrides } : {}),
   };
@@ -89,6 +93,13 @@ function projectConfigLayer(value: unknown, path: string): ConfigLayer {
   }
 
   const record = value as Record<string, unknown>;
+  if (
+    record.metadataFallbackProvider !== undefined &&
+    record.metadataFallbackProvider !== null &&
+    (typeof record.metadataFallbackProvider !== "string" || !record.metadataFallbackProvider.trim())
+  ) {
+    throw new Error(`metadataFallbackProvider must be a non-empty string or null in project config file: ${path}`);
+  }
   if (record.modelAliases !== undefined && !isStringMap(record.modelAliases)) {
     throw new Error(`modelAliases must be an object with string values in project config file: ${path}`);
   }
@@ -114,12 +125,16 @@ function envLayer(env: NodeJS.ProcessEnv): ConfigLayer {
   const authRequired = parseBooleanEnv(env.CLIPROXYAPI_AUTH_REQUIRED);
   const authHeader = parseBooleanEnv(env.CLIPROXYAPI_AUTH_HEADER);
   const modelsDevEnabled = parseBooleanEnv(env.CLIPROXYAPI_MODELS_DEV_ENABLED);
+  const metadataFallbackProvider = env.CLIPROXYAPI_METADATA_FALLBACK_PROVIDER?.trim();
   return {
     ...(env.CLIPROXYAPI_BASE_URL ? { baseUrl: env.CLIPROXYAPI_BASE_URL } : {}),
     ...(env.CLIPROXYAPI_PROVIDER_NAME ? { providerName: env.CLIPROXYAPI_PROVIDER_NAME } : {}),
     ...(authRequired !== undefined ? { authRequired } : {}),
     ...(authHeader !== undefined ? { authHeader } : {}),
     ...(modelsDevEnabled !== undefined ? { modelsDevEnabled } : {}),
+    ...(metadataFallbackProvider
+      ? { metadataFallbackProvider: metadataFallbackProvider.toLowerCase() === "none" ? null : metadataFallbackProvider }
+      : {}),
   };
 }
 
@@ -194,6 +209,13 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
     if (record[field] !== undefined && typeof record[field] !== "string") {
       throw new Error(`${field} must be a string in config file: ${path}`);
     }
+  }
+  if (
+    record.metadataFallbackProvider !== undefined &&
+    record.metadataFallbackProvider !== null &&
+    (typeof record.metadataFallbackProvider !== "string" || !record.metadataFallbackProvider.trim())
+  ) {
+    throw new Error(`metadataFallbackProvider must be a non-empty string or null in config file: ${path}`);
   }
 
   const booleanFields = ["authRequired", "authHeader", "modelsDevEnabled"];

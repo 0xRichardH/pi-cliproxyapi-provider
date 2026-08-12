@@ -9,6 +9,7 @@ test("parses provider-agnostic models.dev catalog", () => {
   });
 
   assert.deepEqual(Object.keys(catalog), ["openai/gpt-5.5"]);
+  assert.equal(catalog["openai/gpt-5.5"].sourceProvider, "openai");
 });
 
 test("parses provider-organized models.dev API catalog", () => {
@@ -26,7 +27,19 @@ test("parses provider-organized models.dev API catalog", () => {
   });
 
   assert.equal(catalog["openai/gpt-5.5"].name, "GPT-5.5");
+  assert.equal(catalog["openai/gpt-5.5"].sourceProvider, "openai");
   assert.equal(catalog["openai/gpt-5.5"].cost?.output, 30);
+});
+
+test("preserves provider-qualified entries when providers share canonical model IDs", () => {
+  const catalog = parseModelsDevCatalog({
+    openrouter: { models: { "minimax/minimax-m3": { id: "minimax/minimax-m3" } } },
+    other: { models: { "minimax/minimax-m3": { id: "minimax/minimax-m3" } } },
+  });
+
+  assert.equal(catalog["openrouter/minimax/minimax-m3"].sourceProvider, "openrouter");
+  assert.equal(catalog["openrouter/minimax/minimax-m3"].id, "minimax/minimax-m3");
+  assert.equal(catalog["other/minimax/minimax-m3"].sourceProvider, "other");
 });
 
 test("aborts models.dev catalog fetch instead of waiting forever on a stuck network fetch", async () => {

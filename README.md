@@ -146,7 +146,7 @@ export CLIPROXYAPI_API_KEY=your-key
 
 Aliases affect metadata only. The package still sends the original CLIProxyAPI model ID to the proxy.
 
-When `/v1/models` reports a canonical owner such as `openai`, the package uses that provider's metadata even if models.dev lists the model under several providers. Add an alias when CLIProxyAPI's reported owner does not match the provider whose limits and pricing apply to your setup.
+When `/v1/models` reports a canonical owner such as `openai`, the package uses that provider's metadata even if models.dev lists the model under several providers. Noncanonical owners can embed a provider hint, so `feedmob-opencode-go` resolves to `opencode-go` when that provider publishes the model. If ownership is still unresolved, the package uses OpenRouter metadata by default when there is exactly one matching OpenRouter entry. Set `metadataFallbackProvider` to another models.dev provider ID, or to `null` to disable this fallback. Add an alias when CLIProxyAPI's reported owner or fallback does not match the provider whose limits and pricing apply to your setup.
 
 Add global aliases to:
 
@@ -160,10 +160,11 @@ Add project aliases manually to:
 .pi/pi-cliproxyapi-provider/config.json
 ```
 
-Project config reads `modelAliases` and `modelOverrides`; other fields are ignored.
+Project config reads `metadataFallbackProvider`, `modelAliases`, and `modelOverrides`; other fields are ignored.
 
 ```json
 {
+  "metadataFallbackProvider": "openrouter",
   "modelAliases": {
     "claude-opus-4-6-thinking": "anthropic/claude-opus-4-6",
     "gpt-5.6-sol": "openai/gpt-5.6-sol"

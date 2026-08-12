@@ -15,6 +15,7 @@ const config: CpaProviderConfig = {
   authHeader: false,
   headers: {},
   modelsDevEnabled: true,
+  metadataFallbackProvider: "openrouter",
   modelAliases: {},
   modelOverrides: {},
 };

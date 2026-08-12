@@ -25,12 +25,15 @@ export interface CpaProviderConfig {
   authHeader: boolean;
   headers: Record<string, string>;
   modelsDevEnabled: boolean;
+  metadataFallbackProvider: string | null;
   modelAliases: Record<string, string>;
   modelOverrides: ProviderModelOverrides;
 }
 
 export interface ModelsDevMetadata {
   id: string;
+  /** models.dev provider key retained for owner-hint matching. */
+  sourceProvider?: string;
   name?: string;
   reasoning?: boolean;
   modalities?: {

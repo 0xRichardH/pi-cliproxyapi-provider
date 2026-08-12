@@ -22,13 +22,15 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
       for (const [modelId, metadata] of Object.entries(provider.models as Record<string, unknown>)) {
         if (!isMetadata(metadata)) continue;
         const canonicalId = metadata.id.includes("/") ? metadata.id : `${key}/${modelId}`;
-        catalog[canonicalId] = { ...metadata, id: canonicalId };
+        const catalogKey = canonicalId.startsWith(`${key}/`) ? canonicalId : `${key}/${canonicalId}`;
+        catalog[catalogKey] = { ...metadata, id: canonicalId, sourceProvider: key };
       }
       continue;
     }
 
     if (isMetadata(value)) {
-      catalog[key] = value;
+      const inferredProvider = key.includes("/") ? key.split("/")[0] : undefined;
+      catalog[key] = inferredProvider ? { ...value, sourceProvider: inferredProvider } : value;
     }
   }
 

@@ -229,6 +229,7 @@ export class ProviderCatalog {
         this.options.config.modelAliases,
         this.options.gpt56ContextWindow,
         this.options.config.modelOverrides,
+        this.options.config.metadataFallbackProvider,
       ),
     };
     return this.snapshot;
