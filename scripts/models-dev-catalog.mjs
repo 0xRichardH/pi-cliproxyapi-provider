@@ -10,7 +10,8 @@ export function normalizeModelsDevCatalog(payload) {
       for (const [modelId, metadata] of Object.entries(value.models)) {
         if (!metadata || typeof metadata !== "object" || typeof metadata.id !== "string") continue;
         const canonicalId = metadata.id.includes("/") ? metadata.id : `${key}/${modelId}`;
-        catalog[canonicalId] = { ...metadata, id: canonicalId };
+        const catalogKey = canonicalId.startsWith(`${key}/`) ? canonicalId : `${key}/${canonicalId}`;
+        catalog[catalogKey] = { ...metadata, id: canonicalId, sourceProvider: key };
       }
       continue;
     }

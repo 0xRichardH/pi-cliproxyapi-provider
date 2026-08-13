@@ -68,9 +68,12 @@ CLIPROXYAPI_PROVIDER_NAME
 CLIPROXYAPI_AUTH_REQUIRED
 CLIPROXYAPI_AUTH_HEADER
 CLIPROXYAPI_MODELS_DEV_ENABLED
+CLIPROXYAPI_METADATA_FALLBACK_PROVIDER
 ```
 
-Project config supports metadata aliases and bounded per-model overrides. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
+Set `CLIPROXYAPI_METADATA_FALLBACK_PROVIDER=none` to disable unresolved-model metadata fallback.
+
+Project config supports `metadataFallbackProvider`, metadata aliases, and bounded per-model overrides. Set `metadataFallbackProvider` to `null` or `"none"` to disable fallback. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
 
 ### GPT-5.6 context window
 
@@ -146,7 +149,7 @@ export CLIPROXYAPI_API_KEY=your-key
 
 Aliases affect metadata only. The package still sends the original CLIProxyAPI model ID to the proxy.
 
-When `/v1/models` reports a canonical owner such as `openai`, the package uses that provider's metadata even if models.dev lists the model under several providers. Add an alias when CLIProxyAPI's reported owner does not match the provider whose limits and pricing apply to your setup.
+When `/v1/models` reports a canonical owner such as `openai`, the package uses that provider's metadata even if models.dev lists the model under several providers. Noncanonical owners can embed a provider hint, so `feedmob-opencode-go` resolves to `opencode-go` when that provider publishes the model. If ownership is still unresolved, the package uses OpenRouter metadata by default when there is exactly one matching OpenRouter entry. Set `metadataFallbackProvider` to another models.dev provider ID, or to `null`/`"none"` to disable this fallback. Legacy metadata caches without source-provider identity are ignored in favor of the bundled provider-qualified catalog until metadata is refreshed. Add an alias when CLIProxyAPI's reported owner or fallback does not match the provider whose limits and pricing apply to your setup.
 
 Add global aliases to:
 
@@ -160,10 +163,11 @@ Add project aliases manually to:
 .pi/pi-cliproxyapi-provider/config.json
 ```
 
-Project config reads `modelAliases` and `modelOverrides`; other fields are ignored.
+Project config reads `metadataFallbackProvider`, `modelAliases`, and `modelOverrides`; other fields are ignored.
 
 ```json
 {
+  "metadataFallbackProvider": "openrouter",
   "modelAliases": {
     "claude-opus-4-6-thinking": "anthropic/claude-opus-4-6",
     "gpt-5.6-sol": "openai/gpt-5.6-sol"

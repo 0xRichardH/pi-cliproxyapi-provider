@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchModelsDevCatalog, parseModelsDevCatalog } from "../src/models-dev.ts";
+import { fetchModelsDevCatalog, hasSourceProviderMetadata, parseModelsDevCatalog } from "../src/models-dev.ts";
 
 test("parses provider-agnostic models.dev catalog", () => {
   const catalog = parseModelsDevCatalog({
@@ -9,6 +9,8 @@ test("parses provider-agnostic models.dev catalog", () => {
   });
 
   assert.deepEqual(Object.keys(catalog), ["openai/gpt-5.5"]);
+  assert.equal(catalog["openai/gpt-5.5"].sourceProvider, undefined);
+  assert.equal(hasSourceProviderMetadata(catalog), false);
 });
 
 test("parses provider-organized models.dev API catalog", () => {
@@ -26,7 +28,20 @@ test("parses provider-organized models.dev API catalog", () => {
   });
 
   assert.equal(catalog["openai/gpt-5.5"].name, "GPT-5.5");
+  assert.equal(catalog["openai/gpt-5.5"].sourceProvider, "openai");
   assert.equal(catalog["openai/gpt-5.5"].cost?.output, 30);
+  assert.equal(hasSourceProviderMetadata(catalog), true);
+});
+
+test("preserves provider-qualified entries when providers share canonical model IDs", () => {
+  const catalog = parseModelsDevCatalog({
+    openrouter: { models: { "minimax/minimax-m3": { id: "minimax/minimax-m3" } } },
+    other: { models: { "minimax/minimax-m3": { id: "minimax/minimax-m3" } } },
+  });
+
+  assert.equal(catalog["openrouter/minimax/minimax-m3"].sourceProvider, "openrouter");
+  assert.equal(catalog["openrouter/minimax/minimax-m3"].id, "minimax/minimax-m3");
+  assert.equal(catalog["other/minimax/minimax-m3"].sourceProvider, "other");
 });
 
 test("aborts models.dev catalog fetch instead of waiting forever on a stuck network fetch", async () => {

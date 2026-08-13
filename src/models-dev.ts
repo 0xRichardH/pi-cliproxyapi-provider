@@ -22,7 +22,8 @@ export function parseModelsDevCatalog(payload: unknown): ModelsDevCatalog {
       for (const [modelId, metadata] of Object.entries(provider.models as Record<string, unknown>)) {
         if (!isMetadata(metadata)) continue;
         const canonicalId = metadata.id.includes("/") ? metadata.id : `${key}/${modelId}`;
-        catalog[canonicalId] = { ...metadata, id: canonicalId };
+        const catalogKey = canonicalId.startsWith(`${key}/`) ? canonicalId : `${key}/${canonicalId}`;
+        catalog[catalogKey] = { ...metadata, id: canonicalId, sourceProvider: key };
       }
       continue;
     }
@@ -46,6 +47,10 @@ export async function fetchModelsDevCatalog(timeoutMs?: number, signal?: AbortSi
     }
     return parseModelsDevCatalog(await response.json());
   }, timeoutMs, "models.dev fetch", signal);
+}
+
+export function hasSourceProviderMetadata(catalog: ModelsDevCatalog): boolean {
+  return Object.values(catalog).every((metadata) => typeof metadata.sourceProvider === "string");
 }
 
 export async function readBundledModelsDevFallback(path: string): Promise<ModelsDevCatalog> {

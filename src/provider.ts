@@ -126,8 +126,10 @@ function emptyMatchMethods(): Record<MetadataMatchMethod, number> {
     alias: 0,
     exact: 0,
     "owner-prefix": 0,
+    "owner-hint": 0,
     suffix: 0,
     "normalized-suffix": 0,
+    "provider-fallback": 0,
   };
 }
 
@@ -155,13 +157,14 @@ export function buildProviderModels(
   aliases: Record<string, string>,
   gpt56ContextWindow: Gpt56ContextWindowMode = "canonical",
   overrides: ProviderModelOverrides = {},
+  metadataFallbackProvider: string | null = "openrouter",
 ): BuildProviderModelsResult {
   const matchMethods = emptyMatchMethods();
   const unmatchedModelIds: string[] = [];
   let enriched = 0;
 
   const models = cpaModels.map((cpaModel) => {
-    const match = findMetadataMatch(cpaModel, catalog, aliases);
+    const match = findMetadataMatch(cpaModel, catalog, aliases, metadataFallbackProvider);
     if (!match) {
       unmatchedModelIds.push(cpaModel.id);
       return applyModelOverride(defaultModel(cpaModel, gpt56ContextWindow), overrides);

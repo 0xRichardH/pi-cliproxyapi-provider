@@ -51,7 +51,31 @@ test("uses safe default config", () => {
   assert.equal(config.baseUrl, DEFAULT_CONFIG.baseUrl);
   assert.equal(config.authRequired, true);
   assert.equal(config.authHeader, true);
+  assert.equal(config.metadataFallbackProvider, "openrouter");
   assert.deepEqual(config.modelOverrides, {});
+});
+
+test("allows metadata fallback provider overrides and disabling", () => {
+  assert.equal(
+    mergeConfigLayers({ metadataFallbackProvider: "other" }, undefined, {}).metadataFallbackProvider,
+    "other",
+  );
+  assert.equal(
+    mergeConfigLayers({ metadataFallbackProvider: null }, undefined, {}).metadataFallbackProvider,
+    null,
+  );
+  assert.equal(
+    mergeConfigLayers({ metadataFallbackProvider: "NoNe" }, undefined, {}).metadataFallbackProvider,
+    null,
+  );
+  assert.equal(
+    mergeConfigLayers(undefined, { metadataFallbackProvider: "none" }, {}).metadataFallbackProvider,
+    null,
+  );
+  assert.equal(
+    mergeConfigLayers(undefined, undefined, { CLIPROXYAPI_METADATA_FALLBACK_PROVIDER: "none" }).metadataFallbackProvider,
+    null,
+  );
 });
 
 test("normalizes authHeader off when authRequired is false", () => {
@@ -178,10 +202,15 @@ test("rejects malformed config values with actionable errors", async () => {
 
   try {
     await writeFile(path, JSON.stringify({ headers: null }));
-
     assert.throws(
       () => readConfigFile(path),
       /headers must be an object with string values/
+    );
+
+    await writeFile(path, JSON.stringify({ metadataFallbackProvider: "" }));
+    assert.throws(
+      () => readConfigFile(path),
+      /metadataFallbackProvider must be a non-empty string or null/
     );
   } finally {
     await rm(dir, { recursive: true, force: true });

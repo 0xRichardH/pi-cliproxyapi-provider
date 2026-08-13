@@ -1,7 +1,7 @@
 import { cpaModelsCachePath, discoveryHeaders, modelsDevCachePath } from "./discovery.ts";
 import { readCache, writeCache, type CacheEnvelope } from "./cache.ts";
 import { fetchCpaModels, parseCpaModelsCache, type CpaModel } from "./cpa.ts";
-import { fetchModelsDevCatalog, parseModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
+import { fetchModelsDevCatalog, hasSourceProviderMetadata, parseModelsDevCatalog, readBundledModelsDevFallback } from "./models-dev.ts";
 import { buildProviderModels, type BuildProviderModelsResult } from "./provider.ts";
 import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type { CpaProviderConfig, ModelsDevCatalog } from "./types.ts";
@@ -205,7 +205,9 @@ export class ProviderCatalog {
   private async loadMetadata(): Promise<{ data: ModelsDevCatalog; fetchedAt?: number; source: MetadataSource }> {
     if (!this.options.config.modelsDevEnabled) return { data: {}, source: "disabled" };
     const cached = await readCache(modelsDevCachePath(), parseModelsDevCatalog);
-    if (cached) return { data: cached.data, fetchedAt: cached.fetchedAt, source: "cache" };
+    if (cached && hasSourceProviderMetadata(cached.data)) {
+      return { data: cached.data, fetchedAt: cached.fetchedAt, source: "cache" };
+    }
     return { data: await readBundledModelsDevFallback(this.options.bundledModelsDevPath), source: "bundled" };
   }
 
@@ -229,6 +231,7 @@ export class ProviderCatalog {
         this.options.config.modelAliases,
         this.options.gpt56ContextWindow,
         this.options.config.modelOverrides,
+        this.options.config.metadataFallbackProvider,
       ),
     };
     return this.snapshot;

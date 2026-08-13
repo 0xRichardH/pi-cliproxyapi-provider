@@ -10,6 +10,7 @@ test("uses environment API key placeholder when auth is required", () => {
     authHeader: true,
     headers: { "User-Agent": "pi" },
     modelsDevEnabled: true,
+    metadataFallbackProvider: "openrouter",
     modelAliases: {},
     modelOverrides: {},
   }, [{
@@ -41,6 +42,7 @@ test("disables strict mode without changing an explicit Responses API", () => {
     authHeader: false,
     headers: {},
     modelsDevEnabled: true,
+    metadataFallbackProvider: "openrouter",
     modelAliases: {},
     modelOverrides: {},
   }, [{
@@ -69,6 +71,7 @@ test("uses nonempty placeholder API key for no-auth mode", () => {
     authHeader: false,
     headers: {},
     modelsDevEnabled: true,
+    metadataFallbackProvider: "openrouter",
     modelAliases: {},
     modelOverrides: {},
   }, []);
@@ -85,6 +88,7 @@ test("forces Authorization header off when auth is disabled", () => {
     authHeader: true,
     headers: {},
     modelsDevEnabled: true,
+    metadataFallbackProvider: "openrouter",
     modelAliases: {},
     modelOverrides: {},
   }, []);
