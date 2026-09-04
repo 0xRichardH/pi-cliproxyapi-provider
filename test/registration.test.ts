@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildProviderRegistration } from "../src/registration.ts";
+import { anthropicBaseUrl, buildProviderRegistration } from "../src/registration.ts";
 import type { ProviderModelConfigLike } from "../src/types.ts";
 
 test("uses environment API key placeholder when auth is required", () => {
@@ -114,6 +114,27 @@ test("adds Anthropic thinking compat flags to Claude models only", () => {
   assert.deepEqual(models[2]?.compat, { supportsStrictMode: false });
   assert.deepEqual(models[3]?.compat, { supportsStrictMode: false });
   assert.equal(models[0]?.api, "anthropic-messages");
+});
+
+test("gives Claude models a base URL without the OpenAI-compatible /v1 suffix", () => {
+  const registration = registrationForModels([
+    claudeModel("claude-opus-5"),
+    { ...claudeModel("gemini-3-pro"), api: undefined },
+  ]);
+
+  // Pi's Anthropic driver appends /v1/messages itself; reusing the provider
+  // base URL verbatim would request /v1/v1/messages.
+  assert.equal(registration.config.models?.[0]?.baseUrl, "http://localhost:8317");
+  assert.equal(registration.config.models?.[1]?.baseUrl, undefined);
+  assert.equal(registration.config.baseUrl, "http://localhost:8317/v1");
+});
+
+test("strips exactly one trailing /v1 when deriving the Anthropic base URL", () => {
+  assert.equal(anthropicBaseUrl("http://localhost:8317/v1"), "http://localhost:8317");
+  assert.equal(anthropicBaseUrl("http://localhost:8317/v1/"), "http://localhost:8317");
+  assert.equal(anthropicBaseUrl("https://cpa.example.com/proxy/v1"), "https://cpa.example.com/proxy");
+  assert.equal(anthropicBaseUrl("https://cpa.example.com/v1/v1"), "https://cpa.example.com/v1");
+  assert.equal(anthropicBaseUrl("https://cpa.example.com"), "https://cpa.example.com");
 });
 
 test("preserves a pre-existing per-model compat value on Claude models", () => {
