@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildProviderRegistration } from "../src/registration.ts";
+import type { ProviderModelConfigLike } from "../src/types.ts";
 
 test("uses environment API key placeholder when auth is required", () => {
   const registration = buildProviderRegistration({
@@ -61,6 +62,71 @@ test("disables strict mode without changing an explicit Responses API", () => {
     supportsStrictMode: false,
   });
   assert.equal(registration.config.models?.[0]?.api, "openai-responses");
+});
+
+function registrationForModels(models: ProviderModelConfigLike[]) {
+  return buildProviderRegistration({
+    providerName: "cpa",
+    baseUrl: "http://localhost:8317/v1",
+    authRequired: false,
+    authHeader: false,
+    headers: {},
+    modelsDevEnabled: true,
+    metadataFallbackProvider: "openrouter",
+    modelAliases: {},
+    modelOverrides: {},
+  }, models);
+}
+
+function claudeModel(id: string, compat?: ProviderModelConfigLike["compat"]): ProviderModelConfigLike {
+  return {
+    id,
+    name: id,
+    reasoning: true,
+    api: "anthropic-messages",
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 64000,
+    ...(compat ? { compat } : {}),
+  };
+}
+
+test("adds Anthropic thinking compat flags to Claude models only", () => {
+  const registration = registrationForModels([
+    claudeModel("claude-opus-5"),
+    claudeModel("0xdev/claude-sonnet-4-6"),
+    { ...claudeModel("gemini-3-pro"), api: undefined },
+    { ...claudeModel("not-claude-opus"), api: undefined },
+  ]);
+
+  const models = registration.config.models ?? [];
+  assert.deepEqual(models[0]?.compat, {
+    supportsStrictMode: false,
+    supportsMidConvoEffort: true,
+    forceAdaptiveThinking: true,
+  });
+  assert.deepEqual(models[1]?.compat, {
+    supportsStrictMode: false,
+    supportsMidConvoEffort: true,
+    forceAdaptiveThinking: true,
+  });
+  assert.deepEqual(models[2]?.compat, { supportsStrictMode: false });
+  assert.deepEqual(models[3]?.compat, { supportsStrictMode: false });
+  assert.equal(models[0]?.api, "anthropic-messages");
+});
+
+test("preserves a pre-existing per-model compat value on Claude models", () => {
+  const registration = registrationForModels([
+    claudeModel("claude-opus-4-6", { supportsLongCacheRetention: true, supportsStrictMode: true }),
+  ]);
+
+  assert.deepEqual(registration.config.models?.[0]?.compat, {
+    supportsLongCacheRetention: true,
+    supportsStrictMode: false,
+    supportsMidConvoEffort: true,
+    forceAdaptiveThinking: true,
+  });
 });
 
 test("uses nonempty placeholder API key for no-auth mode", () => {

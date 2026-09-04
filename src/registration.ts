@@ -1,5 +1,6 @@
 import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ProviderConfig, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import { isClaudeModel } from "./model-api.ts";
 import type { CpaProviderConfig } from "./types.ts";
 import type { ProviderModelConfigLike } from "./types.ts";
 
@@ -18,6 +19,13 @@ export function normalizeProviderModels(models: ProviderModelConfigLike[]): Prov
     compat: {
       ...model.compat,
       supportsStrictMode: false,
+      // Claude models run on the Anthropic Messages API (see model-api.ts).
+      // CLIProxyAPI proxies Anthropic upstreams faithfully — signed thinking
+      // blocks survive a round trip — so Pi can bind thinking effort per turn
+      // and use the adaptive thinking path it uses for anthropic/* models.
+      ...(isClaudeModel({ availableModelId: model.id })
+        ? { supportsMidConvoEffort: true, forceAdaptiveThinking: true }
+        : {}),
     },
   })) as ProviderModelConfig[];
 }
