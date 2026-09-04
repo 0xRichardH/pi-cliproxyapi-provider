@@ -92,7 +92,7 @@ function claudeModel(id: string, compat?: ProviderModelConfigLike["compat"]): Pr
   };
 }
 
-test("adds Anthropic thinking compat flags to Claude models only", () => {
+test("adds the Anthropic adaptive thinking compat flag to Claude models only", () => {
   const registration = registrationForModels([
     claudeModel("claude-opus-5"),
     claudeModel("0xdev/claude-sonnet-4-6"),
@@ -103,17 +103,17 @@ test("adds Anthropic thinking compat flags to Claude models only", () => {
   const models = registration.config.models ?? [];
   assert.deepEqual(models[0]?.compat, {
     supportsStrictMode: false,
-    supportsMidConvoEffort: true,
     forceAdaptiveThinking: true,
   });
   assert.deepEqual(models[1]?.compat, {
     supportsStrictMode: false,
-    supportsMidConvoEffort: true,
     forceAdaptiveThinking: true,
   });
   assert.deepEqual(models[2]?.compat, { supportsStrictMode: false });
   assert.deepEqual(models[3]?.compat, { supportsStrictMode: false });
   assert.equal(models[0]?.api, "anthropic-messages");
+  // CLIProxyAPI rejects the per-message output_config this flag would produce.
+  assert.equal((models[0]?.compat as Record<string, unknown>).supportsMidConvoEffort, undefined);
 });
 
 test("gives Claude models a base URL without the OpenAI-compatible /v1 suffix", () => {
@@ -145,7 +145,6 @@ test("preserves a pre-existing per-model compat value on Claude models", () => {
   assert.deepEqual(registration.config.models?.[0]?.compat, {
     supportsLongCacheRetention: true,
     supportsStrictMode: false,
-    supportsMidConvoEffort: true,
     forceAdaptiveThinking: true,
   });
 });
