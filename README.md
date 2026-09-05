@@ -194,8 +194,8 @@ Saving writes to an existing project config when present, otherwise to the globa
 ## Snapshots and startup
 
 ```text
-CPA /v1/models:      local snapshot at startup, then a background refresh
-models.dev metadata: persistent local snapshot, refreshed manually
+CPA /v1/models:      local snapshot at startup, then a background refresh on every model discovery
+models.dev metadata: persistent local snapshot, re-fetched in the background once it is a week old
 ```
 
 Snapshots live under:
@@ -204,11 +204,13 @@ Snapshots live under:
 ~/.cache/pi-cliproxyapi-provider/
 ```
 
-Startup registers the provider immediately from the last-known-good local snapshots. It then refreshes CLIProxyAPI availability in the background with a short timeout and updates the provider dynamically if the model list changed. On a first run, Pi registers a placeholder until background discovery succeeds. Startup never fetches `models.dev`; it uses the persistent local metadata snapshot or `data/models-dev-fallback.json` when no snapshot exists.
+Startup registers the provider immediately from the last-known-good local snapshots. It then refreshes CLIProxyAPI availability in the background with a short timeout and updates the provider dynamically if the model list changed. On a first run, Pi registers a placeholder until background discovery succeeds. Startup itself never fetches `models.dev`; it uses the persistent local metadata snapshot or `data/models-dev-fallback.json` when no snapshot exists.
 
-Manual refreshes update the running provider immediately; `/reload` is not required. Failed refreshes retain the last-known-good data independently for each source.
+Every model discovery Pi triggers (startup, opening `/model`) re-checks CLIProxyAPI's model list, and **piggybacks a `models.dev` fetch when the metadata snapshot is stale**: either it is still the bundled seed, or the cached fetch is more than seven days old. This is what keeps a newly listed model from rendering with fallback metadata (16384 output tokens, text only, zero cost) until someone notices — the gap self-heals on the next discovery. A fresh snapshot is never re-fetched on its own, so the ~7 MB download stays rare. `/cliproxyapi status` flags a stale snapshot; `/cliproxyapi refresh metadata` forces the fetch now.
 
-A scheduled GitHub Actions workflow checks the bundled fallback catalog daily. When it changes, the workflow validates the package, bumps the patch version, commits the update, and starts the normal release workflow. Maintainers can also update the catalog locally with:
+Manual refreshes update the running provider immediately; `/reload` is not required. Failed refreshes retain the last-known-good data independently for each source — a `models.dev` outage never blocks CLIProxyAPI model discovery.
+
+The bundled `data/models-dev-fallback.json` is only a first-run seed; with the stale-refresh above it is allowed to age and needs no routine maintenance. A scheduled GitHub Actions workflow still checks it daily and, when it changes, validates the package, bumps the patch version, commits the update, and starts the normal release workflow. Maintainers can also update the catalog locally with:
 
 ```bash
 npm run update:models-dev

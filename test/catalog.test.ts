@@ -292,3 +292,134 @@ test("refresh propagates the initiating caller's cancellation reason", async () 
     }
   });
 });
+
+function catalogWithClock(fallback: string, now: () => number, staleAfterMs = 1_000): ProviderCatalog {
+  return new ProviderCatalog({
+    config,
+    gpt56ContextWindow: "canonical",
+    bundledModelsDevPath: fallback,
+    getApiKey: async () => undefined,
+    backgroundTimeoutMs: 50,
+    metadataStaleAfterMs: staleAfterMs,
+    now,
+  });
+}
+
+const modelsDevPayload = { openai: { models: { fresh: { id: "fresh", name: "Fresh from models.dev", reasoning: true, limit: { context: 400000, output: 64000 } } } } };
+
+test("metadata is stale when only the bundled seed is loaded", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const instance = catalog(fallback);
+    const snapshot = await instance.load();
+    assert.equal(snapshot.metadataSource, "bundled");
+    assert.equal(instance.metadataIsStale(snapshot), true);
+  });
+});
+
+test("metadata is fresh inside the threshold and stale past it", async () => {
+  await withTempHome(async (_home, fallback) => {
+    let now = 100_000;
+    await writeCache(modelsDevCachePath(), { "openai/fresh": { id: "openai/fresh", sourceProvider: "openai" } }, now);
+    const instance = catalogWithClock(fallback, () => now, 1_000);
+    const snapshot = await instance.load();
+    assert.equal(snapshot.metadataSource, "cache");
+
+    now = 100_999;
+    assert.equal(instance.metadataIsStale(snapshot), false);
+    now = 101_000;
+    assert.equal(instance.metadataIsStale(snapshot), true);
+  });
+});
+
+test("metadata is never stale when models.dev is disabled", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const instance = new ProviderCatalog({
+      config: { ...config, modelsDevEnabled: false },
+      gpt56ContextWindow: "canonical",
+      bundledModelsDevPath: fallback,
+      getApiKey: async () => undefined,
+    });
+    const snapshot = await instance.load();
+    assert.equal(snapshot.metadataSource, "disabled");
+    assert.equal(instance.metadataIsStale(snapshot), false);
+  });
+});
+
+test("models-if-stale skips models.dev when the metadata snapshot is fresh", async () => {
+  await withTempHome(async (_home, fallback) => {
+    const now = 100_000;
+    await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }]);
+    await writeCache(modelsDevCachePath(), { "openai/fresh": { id: "openai/fresh", sourceProvider: "openai" } }, now);
+    const instance = catalogWithClock(fallback, () => now);
+    await instance.load();
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "fresh", owned_by: "openai" }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const result = await instance.refresh("models-if-stale", "background");
+      assert.equal(result.models.updated, true);
+      assert.equal(result.metadata.attempted, false);
+      assert.deepEqual(urls, ["http://cliproxyapi.test/v1/models"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("models-if-stale fetches models.dev when the snapshot is bundled or stale", async () => {
+  await withTempHome(async (_home, fallback) => {
+    await writeCache(cpaModelsCachePath(config), [{ id: "fresh", owned_by: "openai" }]);
+    const instance = catalog(fallback);
+    const before = await instance.load();
+    assert.equal(before.metadataSource, "bundled");
+    assert.equal(before.built.models[0].name, "Fresh");
+    const urls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      if (String(url).includes("models.dev")) return new Response(JSON.stringify(modelsDevPayload), { status: 200 });
+      return new Response(JSON.stringify({ data: [{ id: "fresh", owned_by: "openai" }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const result = await instance.refresh("models-if-stale", "background");
+      assert.equal(result.metadata.attempted, true);
+      assert.equal(result.metadata.updated, true);
+      assert.equal(result.snapshot.metadataSource, "cache");
+      assert.equal(result.snapshot.built.models[0].name, "Fresh from models.dev");
+      assert.equal(result.snapshot.built.models[0].maxTokens, 64000);
+      assert.deepEqual(urls.sort(), ["http://cliproxyapi.test/v1/models", "https://models.dev/api.json"]);
+      // The refreshed snapshot is no longer stale, so the next routine refresh skips it.
+      assert.equal(instance.metadataIsStale(result.snapshot), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("a failed stale-metadata fetch keeps the previous metadata and still publishes CPA models", async () => {
+  await withTempHome(async (_home, fallback) => {
+    await writeCache(cpaModelsCachePath(config), [{ id: "cached", owned_by: "openai" }]);
+    const instance = catalog(fallback);
+    await instance.load();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      if (String(url).includes("models.dev")) return new Response("upstream down", { status: 503 });
+      return new Response(JSON.stringify({ data: [{ id: "fresh", owned_by: "openai" }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const result = await instance.refresh("models-if-stale", "background");
+      assert.equal(result.models.updated, true);
+      assert.deepEqual(result.snapshot.cpaModels.map((model) => model.id), ["fresh"]);
+      assert.equal(result.metadata.attempted, true);
+      assert.equal(result.metadata.updated, false);
+      assert.ok(result.metadata.error);
+      assert.equal(result.snapshot.metadataSource, "bundled");
+      assert.equal(result.snapshot.built.models[0].name, "Fresh");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

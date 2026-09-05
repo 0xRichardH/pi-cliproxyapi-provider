@@ -49,7 +49,11 @@ export class ProviderRuntime {
     const keyFn: () => Promise<string | undefined> = credential?.type === "api_key"
       ? async () => credential.key
       : () => getDiscoveryApiKey(this.options.config.providerName);
-    const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
+    // Pi calls this at startup and whenever the model selector opens. CPA's
+    // model list is always re-discovered; models.dev metadata is re-fetched
+    // only once it has gone stale, so a newly listed model stops rendering
+    // with fallback metadata without anyone running a manual refresh.
+    const result = await this.options.catalog.refresh("models-if-stale", mode, keyFn, context.signal);
     // Pi publishes refreshModels' return value synchronously. Registering here as
     // well would create a second, competing catalog publication.
     return normalizeProviderModels(

@@ -7,7 +7,25 @@ import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type { CpaProviderConfig, ModelsDevCatalog } from "./types.ts";
 
 export type MetadataSource = "cache" | "bundled" | "disabled";
-export type RefreshTarget = "models" | "metadata" | "all";
+
+/**
+ * `models-if-stale` is the routine target Pi's own `refreshModels` hook uses:
+ * always re-discover CPA's model list, and piggyback a models.dev fetch only
+ * when the metadata snapshot is stale (see {@link ProviderCatalog.metadataIsStale}).
+ * The other targets are explicit and always attempt what they name.
+ */
+export type RefreshTarget = "models" | "metadata" | "all" | "models-if-stale";
+
+/**
+ * How old a models.dev snapshot may get before a routine refresh re-fetches
+ * it. models.dev changes slowly — a model's pricing and limits do not move
+ * between sessions — but a new model family lands every few weeks, and until
+ * the snapshot catches up its entries render with pi's bare fallback metadata
+ * (16384 output tokens, text only, zero cost). A week keeps the ~7 MB download
+ * rare while making that window self-heal without anyone running
+ * `/cliproxyapi refresh metadata`.
+ */
+export const METADATA_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CatalogSnapshot {
   cpaModels: CpaModel[];
@@ -39,7 +57,12 @@ export interface ProviderCatalogOptions {
   getApiKey: () => Promise<string | undefined>;
   backgroundTimeoutMs?: number;
   manualTimeoutMs?: number;
+  /** Budget for a models.dev fetch riding on a background refresh. Defaults to the manual timeout. */
+  metadataBackgroundTimeoutMs?: number;
+  /** Age after which a routine refresh re-fetches models.dev. Defaults to {@link METADATA_STALE_AFTER_MS}. */
+  metadataStaleAfterMs?: number;
   writeSnapshot?: typeof writeCache;
+  now?: () => number;
 }
 
 function canonicalJson(value: unknown): string {
@@ -111,6 +134,23 @@ export class ProviderCatalog {
     return this.snapshot;
   }
 
+  /**
+   * Whether a routine refresh should re-fetch models.dev.
+   *
+   * Stale means: metadata is enabled, and the snapshot is either the bundled
+   * first-run seed (which is frozen at package-publish time and only ever gets
+   * older) or a cached fetch older than the configured threshold. A cached
+   * snapshot with no timestamp is treated as stale rather than trusted forever.
+   */
+  metadataIsStale(snapshot: Pick<CatalogSnapshot, "metadataSource" | "metadataUpdatedAt"> | undefined = this.snapshot): boolean {
+    if (!this.options.config.modelsDevEnabled) return false;
+    if (!snapshot) return true;
+    if (snapshot.metadataSource !== "cache") return true;
+    if (snapshot.metadataUpdatedAt === undefined) return true;
+    const now = (this.options.now ?? Date.now)();
+    return now - snapshot.metadataUpdatedAt >= (this.options.metadataStaleAfterMs ?? METADATA_STALE_AFTER_MS);
+  }
+
   private async waitForActiveRefresh(signal?: AbortSignal): Promise<CatalogRefreshResult> {
     const refresh = this.activeRefresh;
     if (!refresh) throw new Error("No active refresh");
@@ -154,7 +194,10 @@ export class ProviderCatalog {
     let metadataSource = current.metadataSource;
 
     const models: SourceRefreshResult = { attempted: target !== "metadata", updated: false, changed: false };
-    const metadataResult: SourceRefreshResult = { attempted: target !== "models" && this.options.config.modelsDevEnabled, updated: false, changed: false };
+    const attemptMetadata = target === "models-if-stale"
+      ? this.metadataIsStale(current)
+      : target !== "models" && this.options.config.modelsDevEnabled;
+    const metadataResult: SourceRefreshResult = { attempted: attemptMetadata, updated: false, changed: false };
 
     if (models.attempted) {
       try {
@@ -183,7 +226,14 @@ export class ProviderCatalog {
 
     if (metadataResult.attempted) {
       try {
-        const fresh = await fetchModelsDevCatalog(this.options.manualTimeoutMs ?? 10_000, signal);
+        // A stale-triggered fetch rides on a background refresh, so it gets the
+        // (larger) metadata budget rather than the 2 s CPA discovery budget:
+        // models.dev is a ~7 MB document, and pi publishes whatever this returns
+        // rather than blocking the model selector on it.
+        const timeoutMs = mode === "background"
+          ? this.options.metadataBackgroundTimeoutMs ?? this.options.manualTimeoutMs ?? 10_000
+          : this.options.manualTimeoutMs ?? 10_000;
+        const fresh = await fetchModelsDevCatalog(timeoutMs, signal);
         const freshUpdatedAt = Date.now();
         const changed = !sameMetadata(current.metadata, fresh);
         await (this.options.writeSnapshot ?? writeCache)(modelsDevCachePath(), fresh, freshUpdatedAt);

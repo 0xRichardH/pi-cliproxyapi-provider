@@ -61,11 +61,12 @@ test("runtime registers cached models immediately and refreshes without reload",
   assert.equal(registrations[1].provider.models[0].compat.supportsStrictMode, false);
 });
 
-test("runtime refreshModels invokes a models-only catalog refresh with network when allowNetwork is true", async () => {
+test("runtime refreshModels re-discovers CPA models and piggybacks stale metadata when allowNetwork is true", async () => {
   const catalog = {
     load: async () => snapshot("cached"),
     refresh: async (target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
-      assert.equal(target, "models");
+      // Routine discovery: always CPA models, models.dev only once stale.
+      assert.equal(target, "models-if-stale");
       assert.equal(mode, "background");
       if (signal?.aborted) throw signal.reason;
       const refreshed = snapshot("network-fresh");

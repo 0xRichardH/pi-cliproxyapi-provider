@@ -93,7 +93,7 @@ export async function runConfig(ctx: ExtensionCommandContext): Promise<void> {
   await ctx.reload();
 }
 
-function statusText(config: ReturnType<typeof loadConfig>, snapshot: CatalogSnapshot): string {
+function statusText(config: ReturnType<typeof loadConfig>, snapshot: CatalogSnapshot, metadataStale = false): string {
   return [
     `CLIProxyAPI provider: ${config.providerName}`,
     `Base URL: ${config.baseUrl}`,
@@ -102,7 +102,7 @@ function statusText(config: ReturnType<typeof loadConfig>, snapshot: CatalogSnap
     `Reasoning models: ${capabilityCount(snapshot, "reasoning")}`,
     `Image-capable models: ${capabilityCount(snapshot, "image")}`,
     `CPA snapshot: ${age(snapshot.cpaUpdatedAt)}`,
-    `models.dev metadata: ${snapshot.metadataSource}${snapshot.metadataUpdatedAt ? `, ${age(snapshot.metadataUpdatedAt)}` : ""}`,
+    `models.dev metadata: ${snapshot.metadataSource}${snapshot.metadataUpdatedAt ? `, ${age(snapshot.metadataUpdatedAt)}` : ""}${metadataStale ? " (stale; refreshes on next model discovery)" : ""}`,
     `GPT-5.6 context window: ${snapshot.gpt56ContextWindow === "full" ? "full models.dev limit" : "canonical 272000"}`,
   ].join("\n");
 }
@@ -173,7 +173,7 @@ export function registerCliproxyapiCommand(pi: ExtensionAPI, runtime?: ProviderR
       const config = loadConfig(ctx.cwd);
       if (subcommand === "status") {
         const snapshot = catalog.current() ?? await catalog.load();
-        ctx.ui.notify(statusText(config, snapshot), "info");
+        ctx.ui.notify(statusText(config, snapshot, catalog.metadataIsStale(snapshot)), "info");
         return;
       }
       if (subcommand === "refresh") {
