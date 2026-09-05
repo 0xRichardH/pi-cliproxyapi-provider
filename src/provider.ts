@@ -1,6 +1,6 @@
 import type { CpaModel } from "./cpa.ts";
 import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
-import { getModelApiOverride, isGpt56Model, type ModelApiContext } from "./model-api.ts";
+import { getModelApiOverride, isCodexResponsesModel, type ModelApiContext } from "./model-api.ts";
 import { getModelCapabilityOverrides } from "./model-capabilities.ts";
 import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type {
@@ -11,6 +11,12 @@ import type {
   ProviderModelOverrides,
 } from "./types.ts";
 
+/**
+ * Pi's conservative context window for the Codex Responses family (GPT-5.6
+ * and GPT-6). models.dev advertises up to 1050000 for these models, but a
+ * CLIProxyAPI route only allows that when its `max-context-length` override is
+ * set, so the `gpt56ContextWindow` setting must opt in explicitly.
+ */
 export const GPT_5_6_CANONICAL_CONTEXT_WINDOW = 272000;
 
 export const PI_MODEL_DEFAULTS = {
@@ -66,7 +72,7 @@ function contextWindowForModel(
   metadataContextWindow: number | undefined,
   mode: Gpt56ContextWindowMode,
 ): number {
-  if (!isGpt56Model(context)) return metadataContextWindow ?? PI_MODEL_DEFAULTS.contextWindow;
+  if (!isCodexResponsesModel(context)) return metadataContextWindow ?? PI_MODEL_DEFAULTS.contextWindow;
   if (mode === "full") return metadataContextWindow ?? GPT_5_6_CANONICAL_CONTEXT_WINDOW;
   return GPT_5_6_CANONICAL_CONTEXT_WINDOW;
 }
