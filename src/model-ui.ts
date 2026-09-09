@@ -1,3 +1,4 @@
+import { getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
 import { DynamicBorder, getSettingsListTheme, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, type SelectItem, SelectList, type SettingItem, SettingsList, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
@@ -75,13 +76,18 @@ function detailItems(model: ProviderModelConfigLike, override: ProviderModelOver
   ];
 }
 
+function thinkingLevels(model: ProviderModelConfigLike): string {
+  // getSupportedThinkingLevels reads only `reasoning` and `thinkingLevelMap`.
+  return getSupportedThinkingLevels(model as unknown as Model<Api>).join(", ");
+}
+
 function details(model: ProviderModelConfigLike): string[] {
   return [
     `Name: ${model.name}`,
     `API: ${model.api ?? "openai-completions (provider default)"}`,
     `Input: ${model.input.join(", ")}`,
     `Cost: in ${model.cost.input}, out ${model.cost.output}, cache read ${model.cost.cacheRead}, cache write ${model.cost.cacheWrite}`,
-    `Thinking map: ${model.thinkingLevelMap ? Object.keys(model.thinkingLevelMap).join(", ") : "none"}`,
+    `Thinking levels: ${thinkingLevels(model)}${model.thinkingLevelMap ? "" : " (pi default)"}`,
     `Other compat: ${formattedOtherCompat(model)}`,
   ];
 }

@@ -36,6 +36,13 @@ export interface ModelsDevMetadata {
   sourceProvider?: string;
   name?: string;
   reasoning?: boolean;
+  /**
+   * models.dev's description of how a reasoning model is controlled. The
+   * `effort` entry lists the provider's accepted effort names, which is the
+   * only per-model source for pi's extended `xhigh`/`max` levels: CLIProxyAPI's
+   * `/v1/models` carries no such data.
+   */
+  reasoning_options?: ModelsDevReasoningOption[];
   modalities?: {
     input?: string[];
     output?: string[];
@@ -60,6 +67,13 @@ export interface ModelsDevMetadata {
       };
     }>;
   };
+}
+
+export interface ModelsDevReasoningOption {
+  type: string;
+  values?: string[];
+  min?: number;
+  max?: number;
 }
 
 export type ModelsDevCatalog = Record<string, ModelsDevMetadata>;

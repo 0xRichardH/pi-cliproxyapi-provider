@@ -145,6 +145,12 @@ export CLIPROXYAPI_API_KEY=your-key
 /cliproxyapi config connection  # open endpoint and authentication editor
 ```
 
+## Thinking levels
+
+Pi only offers the extended `xhigh` and `max` thinking levels when a model publishes a `thinkingLevelMap` that names them; without one, every reasoning model stops at `high`. CLIProxyAPI's `/v1/models` says nothing about effort, so the package derives the map from the `reasoning_options` field in models.dev metadata: each effort the provider accepts (`low` … `max`) maps to itself, and any pi level the provider does not accept maps to `null` so pi hides just that level. Claude Fable 5.x, Opus 4.7+ and Sonnet 5 therefore expose `xhigh` and `max`; Opus 4.6 exposes `max` but not `xhigh`; models that models.dev describes only with a thinking budget keep pi's default budget mapping.
+
+`off` follows the same data. A `none` effort maps to it, a `toggle` option leaves it available, and a model with neither (Claude Fable 5.x) marks it `null`, because the upstream rejects `thinking.type = disabled` for those models. GPT-5.6 and GPT-6 keep their hand-written maps, which encode details models.dev lacks.
+
 ## Metadata aliases
 
 Aliases affect metadata only. The package still sends the original CLIProxyAPI model ID to the proxy.

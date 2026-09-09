@@ -342,3 +342,115 @@ test("applies bounded user overrides without changing forced model API selection
   assert.equal(result.models[0].api, "openai-responses");
   assert.equal(result.models[0].thinkingLevelMap?.max, "max");
 });
+
+const effortCatalog = {
+  "anthropic/claude-fable-5-1": {
+    id: "anthropic/claude-fable-5-1",
+    name: "Claude Fable 5.1",
+    reasoning: true,
+    reasoning_options: [{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }],
+  },
+  "anthropic/claude-opus-4-7": {
+    id: "anthropic/claude-opus-4-7",
+    name: "Claude Opus 4.7",
+    reasoning: true,
+    reasoning_options: [{ type: "toggle" }, { type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }],
+  },
+  "anthropic/claude-opus-4-6": {
+    id: "anthropic/claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    reasoning: true,
+    reasoning_options: [
+      { type: "effort", values: ["low", "medium", "high", "max"] },
+      { type: "budget_tokens", min: 1024 },
+    ],
+  },
+  "anthropic/claude-sonnet-4-5": {
+    id: "anthropic/claude-sonnet-4-5",
+    name: "Claude Sonnet 4.5",
+    reasoning: true,
+    reasoning_options: [{ type: "budget_tokens", min: 1024 }],
+  },
+  "openai/gpt-5.5": {
+    id: "openai/gpt-5.5",
+    name: "GPT-5.5",
+    reasoning: true,
+    reasoning_options: [{ type: "effort", values: ["none", "low", "medium", "high", "xhigh"] }],
+  },
+  "openai/gpt-5.6": {
+    id: "openai/gpt-5.6",
+    name: "GPT-5.6",
+    reasoning: true,
+    reasoning_options: [{ type: "effort", values: ["low", "medium"] }],
+  },
+  "acme/legacy-thinker": {
+    id: "acme/legacy-thinker",
+    name: "Legacy",
+    reasoning: true,
+  },
+};
+
+function modelFor(id: string) {
+  const result = buildProviderModels([{ id }], effortCatalog, {}, "canonical", {}, null);
+  assert.equal(result.stats.enriched, 1, `${id} should match metadata`);
+  return result.models[0];
+}
+
+test("derives xhigh and max from the models.dev effort list", () => {
+  assert.deepEqual(modelFor("claude-fable-5-1").thinkingLevelMap, {
+    off: null,
+    minimal: null,
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: "xhigh",
+    max: "max",
+  });
+});
+
+test("leaves off available when models.dev also lists a toggle or budget mode", () => {
+  for (const id of ["claude-opus-4-7", "claude-opus-4-6"]) {
+    const map = modelFor(id).thinkingLevelMap;
+    assert.equal("off" in (map ?? {}), false, `${id} should not pin off`);
+    assert.equal(map?.max, "max");
+  }
+});
+
+test("represents effort holes as null so pi hides only the missing level", () => {
+  const map = modelFor("claude-opus-4-6").thinkingLevelMap;
+  assert.equal(map?.xhigh, null);
+  assert.equal(map?.max, "max");
+  assert.equal(map?.high, "high");
+});
+
+test("maps a none effort onto pi's off level", () => {
+  const map = modelFor("gpt-5.5").thinkingLevelMap;
+  assert.equal(map?.off, "none");
+  assert.equal(map?.xhigh, "xhigh");
+  assert.equal(map?.max, null);
+});
+
+test("keeps pi's default budget mapping for budget-only and undescribed reasoning models", () => {
+  assert.equal(modelFor("claude-sonnet-4-5").thinkingLevelMap, undefined);
+  assert.equal(modelFor("legacy-thinker").thinkingLevelMap, undefined);
+});
+
+test("family capability rules win over the models.dev effort list", () => {
+  const map = modelFor("gpt-5.6").thinkingLevelMap;
+  assert.equal(map?.off, "none");
+  assert.equal(map?.xhigh, "xhigh");
+  assert.equal(map?.max, "max");
+});
+
+test("keeps the derived thinking map under a user reasoning override, like family maps", () => {
+  const result = buildProviderModels(
+    [{ id: "claude-fable-5-1" }],
+    effortCatalog,
+    {},
+    "canonical",
+    { "claude-fable-5-1": { reasoning: false } },
+    null,
+  );
+  assert.equal(result.models[0].reasoning, false);
+  assert.equal(result.models[0].thinkingLevelMap?.xhigh, "xhigh");
+});

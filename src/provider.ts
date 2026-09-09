@@ -1,7 +1,7 @@
 import type { CpaModel } from "./cpa.ts";
 import { findMetadataMatch, type MetadataMatchMethod } from "./matching.ts";
 import { getModelApiOverride, isCodexResponsesModel, type ModelApiContext } from "./model-api.ts";
-import { getModelCapabilityOverrides } from "./model-capabilities.ts";
+import { getModelCapabilityOverrides, thinkingLevelMapFromMetadata } from "./model-capabilities.ts";
 import type { Gpt56ContextWindowMode } from "./settings.ts";
 import type {
   InputModality,
@@ -88,15 +88,18 @@ function modelFromMetadata(
   };
   const capabilityOverrides = getModelCapabilityOverrides(capabilityContext);
   const api = getModelApiOverride(capabilityContext);
+  const reasoning = capabilityOverrides.reasoning ?? metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning;
+  // Family rules encode knowledge models.dev lacks (GPT-6's minimal→low
+  // downmap); otherwise the model's own effort list decides which levels exist.
+  const thinkingLevelMap = capabilityOverrides.thinkingLevelMap
+    ?? (reasoning ? thinkingLevelMapFromMetadata(metadata) : undefined);
 
   return {
     id: cpaModel.id,
     name: metadata.name ?? cpaModel.id,
-    reasoning: capabilityOverrides.reasoning ?? metadata.reasoning ?? PI_MODEL_DEFAULTS.reasoning,
+    reasoning,
     ...(api ? { api } : {}),
-    ...(capabilityOverrides.thinkingLevelMap
-      ? { thinkingLevelMap: capabilityOverrides.thinkingLevelMap }
-      : {}),
+    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
     input: inputFromMetadata(metadata),
     cost: costFromMetadata(metadata),
     contextWindow: contextWindowForModel(capabilityContext, metadata.limit?.context, gpt56ContextWindow),

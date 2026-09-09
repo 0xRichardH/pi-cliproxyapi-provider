@@ -1,5 +1,6 @@
-import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
+import type { ThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
 import { isGpt6Model } from "./model-api.ts";
+import type { ModelsDevMetadata } from "./types.ts";
 
 export interface ModelCapabilityContext {
   availableModelId: string;
@@ -64,6 +65,61 @@ const MODEL_CAPABILITY_RULES: readonly ModelCapabilityRule[] = [
     },
   },
 ];
+
+/**
+ * Pi's non-`off` thinking levels in rank order. Each is also the literal effort
+ * name Anthropic and OpenAI accept, so a models.dev `effort` list can be read
+ * directly against it.
+ */
+const PI_EFFORT_LEVELS: readonly ThinkingLevel[] = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+/**
+ * Derive a thinking map from models.dev `reasoning_options`.
+ *
+ * Pi treats an omitted map as "standard levels through `high`, no `xhigh` or
+ * `max`", so a model that accepts those efforts (Claude Fable 5.x, Opus 4.7+,
+ * Sonnet 5, GPT-5.6) silently loses its top levels unless something publishes
+ * them. CLIProxyAPI's `/v1/models` does not, but the models.dev catalog the
+ * extension already fetches lists the exact effort names each model accepts.
+ *
+ * Only the `effort` option contributes. Each pi level named in it maps to
+ * itself; every other level maps to `null`, which is how pi represents holes
+ * (Opus 4.6 accepts `max` but not `xhigh`). A `none` effort maps to `off`.
+ * When `effort` is the *only* option, thinking cannot be disabled at all (Claude
+ * Fable 5.x rejects `thinking.type = disabled`), so `off` becomes `null`; a
+ * `toggle` or `budget_tokens` sibling means the model also has a switchable
+ * mode, and `off` stays available. Models that only expose `budget_tokens`
+ * return `undefined` so pi keeps its default budget mapping.
+ */
+export function thinkingLevelMapFromMetadata(metadata: ModelsDevMetadata): ThinkingLevelMap | undefined {
+  const options = metadata.reasoning_options;
+  if (!Array.isArray(options)) return undefined;
+
+  const effort = options.find((option) => option?.type === "effort" && Array.isArray(option.values));
+  if (!effort?.values) return undefined;
+
+  const accepted = new Set(effort.values);
+  const map: ThinkingLevelMap = {};
+
+  for (const level of PI_EFFORT_LEVELS) {
+    map[level] = accepted.has(level) ? level : null;
+  }
+
+  if (accepted.has("none")) {
+    map.off = "none";
+  } else if (options.every((option) => option?.type === "effort")) {
+    map.off = null;
+  }
+
+  return map;
+}
 
 export function getModelCapabilityOverrides(context: ModelCapabilityContext): ModelCapabilityOverrides {
   const resolved: ModelCapabilityOverrides = {};
