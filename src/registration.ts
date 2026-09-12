@@ -1,5 +1,6 @@
 import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ProviderConfig, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import { isClaudeModel } from "./model-api.ts";
 import type { CpaProviderConfig } from "./types.ts";
 import type { ProviderModelConfigLike } from "./types.ts";
 
@@ -8,7 +9,23 @@ export interface ProviderRegistration {
   config: ProviderConfig;
 }
 
-export function normalizeProviderModels(models: ProviderModelConfigLike[]): ProviderModelConfig[] {
+/**
+ * The base URL an `anthropic-messages` model must carry.
+ *
+ * Pi's Anthropic driver builds its endpoint as `<baseUrl>/v1/messages`, while
+ * the provider base URL points at CLIProxyAPI's OpenAI-compatible root, which
+ * conventionally ends in `/v1` (model discovery is `<baseUrl>/models`). Reusing
+ * it verbatim would request `/v1/v1/messages` and get a 404, so Claude models
+ * publish a model-level base URL with that one trailing `/v1` removed.
+ */
+export function anthropicBaseUrl(providerBaseUrl: string): string {
+  return providerBaseUrl.replace(/\/+$/u, "").replace(/\/v1$/u, "");
+}
+
+export function normalizeProviderModels(
+  models: ProviderModelConfigLike[],
+  providerBaseUrl?: string,
+): ProviderModelConfig[] {
   return models.map((model) => ({
     ...model,
     // CLIProxyAPI accepts OpenAI-compatible function tools for both Chat
@@ -18,7 +35,23 @@ export function normalizeProviderModels(models: ProviderModelConfigLike[]): Prov
     compat: {
       ...model.compat,
       supportsStrictMode: false,
+      // Claude models run on the Anthropic Messages API (see model-api.ts) and
+      // use the same adaptive thinking path pi uses for anthropic/* models, so
+      // effort rides on a top-level `output_config`.
+      //
+      // `supportsMidConvoEffort` is deliberately NOT set. It makes pi attach a
+      // per-message `output_config` to synthesized system messages behind the
+      // mid-conversation-output-config beta; CLIProxyAPI does not honor that
+      // beta and rejects the request with
+      // `messages.N.output_config: Extra inputs are not permitted`. Top-level
+      // `output_config` is accepted, so adaptive thinking still works.
+      ...(isClaudeModel({ availableModelId: model.id })
+        ? { forceAdaptiveThinking: true }
+        : {}),
     },
+    ...(providerBaseUrl && isClaudeModel({ availableModelId: model.id })
+      ? { baseUrl: anthropicBaseUrl(providerBaseUrl) }
+      : {}),
   })) as ProviderModelConfig[];
 }
 
@@ -36,7 +69,7 @@ export function buildProviderRegistration(
       apiKey: config.authRequired ? "$CLIPROXYAPI_API_KEY" : "cliproxyapi-no-auth",
       authHeader: config.authRequired && config.authHeader,
       headers: Object.keys(config.headers).length > 0 ? config.headers : undefined,
-      models: normalizeProviderModels(models),
+      models: normalizeProviderModels(models, config.baseUrl),
       refreshModels,
     },
   };

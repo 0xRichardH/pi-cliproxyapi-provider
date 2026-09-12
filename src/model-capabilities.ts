@@ -1,4 +1,5 @@
 import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
+import { isGpt6Model } from "./model-api.ts";
 
 export interface ModelCapabilityContext {
   availableModelId: string;
@@ -25,6 +26,22 @@ const GPT_5_6_THINKING_LEVEL_MAP: ThinkingLevelMap = {
   max: "max",
 };
 
+/**
+ * GPT-6 Astra cannot switch reasoning off (its catalog entry lists only
+ * low..max plus an `ultra` level pi has no slot for), and it has no `minimal`
+ * effort: the lowest it accepts is `low`, so pi's `minimal` maps down to it.
+ * Mirrors pi's native `openai-codex/gpt-6-astra` definition.
+ */
+const GPT_6_THINKING_LEVEL_MAP: ThinkingLevelMap = {
+  off: null,
+  minimal: "low",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max",
+};
+
 function includesModelFamily(context: ModelCapabilityContext, family: string): boolean {
   return [context.availableModelId, context.metadataModelId]
     .filter((id): id is string => id !== undefined)
@@ -37,6 +54,13 @@ const MODEL_CAPABILITY_RULES: readonly ModelCapabilityRule[] = [
     overrides: {
       reasoning: true,
       thinkingLevelMap: GPT_5_6_THINKING_LEVEL_MAP,
+    },
+  },
+  {
+    matches: (context) => isGpt6Model(context),
+    overrides: {
+      reasoning: true,
+      thinkingLevelMap: GPT_6_THINKING_LEVEL_MAP,
     },
   },
 ];
