@@ -41,6 +41,7 @@ export class ProviderRuntime {
       const snapshot = await this.options.catalog.load();
       return normalizeProviderModels(
         snapshot.built.models.length > 0 ? snapshot.built.models : buildUnavailableProviderModels(),
+        this.options.config.baseUrl,
       );
     }
     const mode = context.force ? "manual" : "background";
@@ -55,6 +56,7 @@ export class ProviderRuntime {
       result.snapshot.built.models.length > 0
         ? result.snapshot.built.models
         : buildUnavailableProviderModels(),
+      this.options.config.baseUrl,
     );
   }
 
