@@ -9,6 +9,26 @@ const cpaModels: CpaModel[] = [
   { id: "unknown-local", object: "model", owned_by: "feedmob-litellm" }
 ];
 
+/** Every `claude*` id served by the live CLIProxyAPI catalog. */
+export const CLAUDE_CATALOG_IDS = [
+  "claude-3-5-haiku-20241022",
+  "claude-3-7-sonnet-20250219",
+  "claude-fable-5",
+  "claude-fable-5-1",
+  "claude-haiku-4-5-20251001",
+  "claude-opus-4-1-20250805",
+  "claude-opus-4-20250514",
+  "claude-opus-4-5-20251101",
+  "claude-opus-4-6",
+  "claude-opus-4-7",
+  "claude-opus-4-8",
+  "claude-opus-5",
+  "claude-sonnet-4-20250514",
+  "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-6",
+  "claude-sonnet-5",
+];
+
 const catalog = {
   "openai/gpt-5.5": {
     id: "openai/gpt-5.5",
@@ -91,7 +111,7 @@ test("routes GPT-5.6 family models through the Responses API", () => {
     { id: "gpt-5.6-codex" },
     { id: "0xdev/gpt-5.6-codex-mini" },
     { id: "gpt-5.60" },
-    { id: "claude-opus-4-6" },
+    { id: "gemini-3-pro" },
   ], {}, {});
 
   assert.deepEqual(result.models.map((model) => model.api), [
@@ -101,6 +121,123 @@ test("routes GPT-5.6 family models through the Responses API", () => {
     undefined,
     undefined,
   ]);
+});
+
+test("routes GPT-6 Astra through the Responses API with its own thinking map", () => {
+  const expectedThinkingLevelMap = {
+    off: null,
+    minimal: "low",
+    low: "low",
+    medium: "medium",
+    high: "high",
+    xhigh: "xhigh",
+    max: "max",
+  };
+  const result = buildProviderModels([
+    { id: "gpt-6-astra", owned_by: "openai" },
+    { id: "0xdev/gpt-6-astra" },
+    { id: "gpt-6.1-nova" },
+  ], {}, {});
+
+  for (const model of result.models) {
+    assert.equal(model.api, "openai-responses", `${model.id} should use openai-responses`);
+    assert.equal(model.reasoning, true, `${model.id} should support reasoning`);
+    assert.deepEqual(model.thinkingLevelMap, expectedThinkingLevelMap, `${model.id} thinking map`);
+    assert.equal(model.contextWindow, 272000, `${model.id} should use the canonical Codex context window`);
+  }
+});
+
+test("does not treat GPT-6 look-alikes as the GPT-6 family", () => {
+  const result = buildProviderModels([
+    { id: "gpt-60" },
+    { id: "gpt-6x" },
+    { id: "chatgpt-6-astra" },
+  ], {}, {});
+
+  for (const model of result.models) {
+    assert.equal(model.api, undefined, `${model.id} should not carry an API override`);
+    assert.equal(model.thinkingLevelMap, undefined, `${model.id} should not carry a thinking map`);
+  }
+});
+
+test("keeps GPT-6 Astra on the canonical context window unless the setting opts in", () => {
+  const astraCatalog = {
+    "openai/gpt-6-astra": {
+      id: "openai/gpt-6-astra",
+      name: "GPT-6 Astra",
+      reasoning: true,
+      modalities: { input: ["text", "image"], output: ["text"] },
+      limit: { context: 1050000, output: 128000 },
+      cost: { input: 10, output: 50, cache_read: 1, cache_write: 12.5 },
+    },
+  };
+  const cpaModel = { id: "gpt-6-astra", owned_by: "openai" };
+
+  const canonical = buildProviderModels([cpaModel], astraCatalog, {});
+  assert.equal(canonical.stats.enriched, 1);
+  assert.equal(canonical.models[0].name, "GPT-6 Astra");
+  assert.deepEqual(canonical.models[0].input, ["text", "image"]);
+  assert.equal(canonical.models[0].contextWindow, 272000);
+  assert.equal(canonical.models[0].maxTokens, 128000);
+  assert.equal(canonical.models[0].api, "openai-responses");
+  assert.equal(canonical.models[0].thinkingLevelMap?.off, null);
+  assert.deepEqual(canonical.models[0].cost, { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 });
+
+  const full = buildProviderModels([cpaModel], astraCatalog, {}, "full");
+  assert.equal(full.models[0].contextWindow, 1050000);
+});
+
+test("routes every catalog Claude model through the Anthropic Messages API", () => {
+  const result = buildProviderModels(CLAUDE_CATALOG_IDS.map((id) => ({ id })), {}, {});
+
+  assert.equal(result.models.length, 16);
+  for (const model of result.models) {
+    assert.equal(model.api, "anthropic-messages", `${model.id} should use anthropic-messages`);
+  }
+});
+
+test("leaves non-Claude, non-Codex-Responses models on the provider default API", () => {
+  const result = buildProviderModels([
+    { id: "gemini-3-pro" },
+    { id: "gpt-5.5" },
+    { id: "gpt-image-2" },
+    { id: "codex-auto-review" },
+    { id: "not-claude-opus" },
+    { id: "claudette-1" },
+  ], {}, {});
+
+  for (const model of result.models) {
+    assert.equal(model.api, undefined, `${model.id} should not carry an API override`);
+  }
+});
+
+test("routes Claude through the Messages API from metadata ids and owner prefixes", () => {
+  const result = buildProviderModels(
+    [{ id: "claude-opus-4-6-thinking", owned_by: "antigravity" }, { id: "0xdev/claude-opus-5" }],
+    catalog,
+    { "claude-opus-4-6-thinking": "anthropic/claude-opus-4-6" },
+  );
+
+  // First model is enriched (modelFromMetadata), second falls back (defaultModel).
+  assert.equal(result.stats.enriched, 1);
+  assert.equal(result.models[0].api, "anthropic-messages");
+  assert.equal(result.models[1].api, "anthropic-messages");
+});
+
+test("recognizes Claude through a canonical metadata alias", () => {
+  const result = buildProviderModels(
+    [{ id: "custom-opus" }],
+    {
+      "anthropic/claude-opus-5": {
+        id: "anthropic/claude-opus-5",
+        name: "Claude Opus 5",
+        reasoning: true,
+      },
+    },
+    { "custom-opus": "anthropic/claude-opus-5" },
+  );
+
+  assert.equal(result.models[0].api, "anthropic-messages");
 });
 
 test("uses provider pricing while keeping the canonical GPT-5.6 context window by default", () => {
