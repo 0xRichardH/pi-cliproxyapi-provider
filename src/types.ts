@@ -69,6 +69,7 @@ export interface ProviderModelConfigLike {
   name: string;
   reasoning: boolean;
   api?: ProviderModelConfig["api"];
+  baseUrl?: string;
   compat?: ProviderModelConfig["compat"];
   thinkingLevelMap?: ThinkingLevelMap;
   input: InputModality[];
