@@ -53,7 +53,9 @@ export function registerGatewayTelemetry(pi: {
     install();
   }) as (...args: never[]) => unknown);
   pi.on("agent_settled", ((_event: unknown, ctx: { ui?: { notify?: (message: string, type?: string) => void } }) => {
-    ctx.ui?.notify?.(`TPS ${formatGatewayTokensPerSecond(captured)} tok/s`, "info");
+    if (captured !== undefined) {
+      ctx.ui?.notify?.(`TPS ${formatGatewayTokensPerSecond(captured)} tok/s`, "info");
+    }
     captured = undefined;
   }) as (...args: never[]) => unknown);
   pi.on("session_shutdown", (() => {
