@@ -25,7 +25,7 @@ export function anthropicBaseUrl(providerBaseUrl: string): string {
 export function normalizeProviderModels(
   models: ProviderModelConfigLike[],
   providerBaseUrl?: string,
-): ProviderModelConfig[] {
+): ProviderModelConfigLike[] {
   return models.map((model) => ({
     ...model,
     // CLIProxyAPI accepts OpenAI-compatible function tools for both Chat
@@ -52,7 +52,7 @@ export function normalizeProviderModels(
     ...(providerBaseUrl && isClaudeModel({ availableModelId: model.id })
       ? { baseUrl: anthropicBaseUrl(providerBaseUrl) }
       : {}),
-  })) as ProviderModelConfig[];
+  }));
 }
 
 export function buildProviderRegistration(

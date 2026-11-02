@@ -1,5 +1,4 @@
-import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
-import type { ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import type { Api, Model, ThinkingLevelMap } from "@earendil-works/pi-ai";
 
 export type InputModality = "text" | "image";
 
@@ -68,9 +67,9 @@ export interface ProviderModelConfigLike {
   id: string;
   name: string;
   reasoning: boolean;
-  api?: ProviderModelConfig["api"];
+  api?: Api;
   baseUrl?: string;
-  compat?: ProviderModelConfig["compat"];
+  compat?: Model<Api>["compat"];
   thinkingLevelMap?: ThinkingLevelMap;
   input: InputModality[];
   cost: {
