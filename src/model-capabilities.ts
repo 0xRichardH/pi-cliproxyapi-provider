@@ -1,5 +1,5 @@
 import type { ThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
-import { getModelApiOverride, isGpt6Model } from "./model-api.ts";
+import { getModelApiOverride, isGpt53CodexModel, isGpt53CodexSparkModel, isGpt54OrGpt55Model, isGpt6Model, isProModel } from "./model-api.ts";
 import type { ModelsDevCatalog, ModelsDevMetadata } from "./types.ts";
 
 export interface ModelCapabilityContext {
@@ -45,6 +45,36 @@ const GPT_6_THINKING_LEVEL_MAP: ThinkingLevelMap = {
   max: "max",
 };
 
+const GPT_5_X_THINKING_LEVEL_MAP: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: null,
+};
+
+const GPT_5_X_PRO_THINKING_LEVEL_MAP: ThinkingLevelMap = {
+  off: null,
+  minimal: null,
+  low: null,
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: null,
+};
+
+const GPT_5_3_CODEX_SPARK_THINKING_LEVEL_MAP: ThinkingLevelMap = {
+  off: null,
+  minimal: null,
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: null,
+};
+
 const PI_EFFORT_LEVELS: readonly ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
 function includesModelFamily(context: ModelCapabilityContext, family: string): boolean {
@@ -86,6 +116,25 @@ const MODEL_CAPABILITY_RULES: readonly ModelCapabilityRule[] = [
     overrides: () => ({
       reasoning: true,
       thinkingLevelMap: GPT_6_THINKING_LEVEL_MAP,
+    }),
+  },
+  {
+    matches: (context) => isGpt53CodexModel(context) || isGpt54OrGpt55Model(context),
+    overrides: () => ({
+      reasoning: true,
+      thinkingLevelMap: GPT_5_X_THINKING_LEVEL_MAP,
+    }),
+  },
+  {
+    matches: (context) => isGpt53CodexSparkModel(context),
+    overrides: () => ({
+      thinkingLevelMap: GPT_5_3_CODEX_SPARK_THINKING_LEVEL_MAP,
+    }),
+  },
+  {
+    matches: (context) => isGpt54OrGpt55Model(context) && isProModel(context),
+    overrides: () => ({
+      thinkingLevelMap: GPT_5_X_PRO_THINKING_LEVEL_MAP,
     }),
   },
   {

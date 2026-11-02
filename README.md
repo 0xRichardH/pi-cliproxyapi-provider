@@ -1,6 +1,6 @@
 # pi-cliproxyapi-provider
 
-`pi-cliproxyapi-provider` registers one [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance as a pi model provider. It discovers models from CLIProxyAPI's OpenAI-compatible `/v1/models` endpoint and enriches them with provider-specific metadata from [models.dev](https://models.dev/). Mixed catalogs use OpenAI Completions by default, while GPT-5.6 family models (including Codex variants) and GPT-6 models (`gpt-6-astra`) use the Responses API so pi can read their usage data, and Claude models use the Anthropic Messages API so signed thinking blocks and per-turn thinking effort survive a multi-turn conversation. Canonical `/v1/models` owners such as `openai` select the matching provider metadata; aliases can override that selection when a proxy routes billing differently.
+`pi-cliproxyapi-provider` registers one [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance as a pi model provider. It discovers models from CLIProxyAPI's OpenAI-compatible `/v1/models` endpoint and enriches them with provider-specific metadata from [models.dev](https://models.dev/). Mixed catalogs use OpenAI Completions by default, while Codex GPT models (`gpt-5.3-codex` and later, including GPT-6) use the Responses API so pi can read their usage data, and Claude models use the Anthropic Messages API so signed thinking blocks and per-turn thinking effort survive a multi-turn conversation. Canonical `/v1/models` owners such as `openai` select the matching provider metadata; aliases can override that selection when a proxy routes billing differently.
 
 ## Install
 
@@ -75,11 +75,22 @@ Set `CLIPROXYAPI_METADATA_FALLBACK_PROVIDER=none` to disable unresolved-model me
 
 Project config supports `metadataFallbackProvider`, metadata aliases, and bounded per-model overrides. Set `metadataFallbackProvider` to `null` or `"none"` to disable fallback. Connection and auth settings such as `baseUrl`, `providerName`, `authRequired`, `authHeader`, and `headers` must be set in global config or environment variables.
 
-### GPT-5.6 / GPT-6 context window
+### Codex GPT context window
 
-The provider advertises a `272000`-token context window for GPT-5.6 and GPT-6 models by default. This matches Pi's conservative canonical limit, keeps compaction behavior consistent with native model definitions, and avoids assuming that every CLIProxyAPI upstream account or route enables the provider's full long-context limit.
+The provider advertises a conservative context window for the models CLIProxyAPI serves from Codex OAuth credentials, so compaction behavior matches Pi's native definitions and no assumption is made that every CLIProxyAPI route enables the provider's full long-context limit:
 
-To opt into the full context limit reported by models.dev (currently `1050000` tokens for OpenAI GPT-5.6 and GPT-6 models), add this package-specific setting to global `~/.pi/agent/settings.json`:
+| Models | Default context window |
+| --- | --- |
+| `gpt-5.3-codex-spark` | `128000` |
+| `gpt-5.4`, `gpt-5.5`, `gpt-5.6`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra` | `272000` |
+| `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol` | `272000` |
+| `gpt-5.6-cyber` | `400000` |
+| `gpt-6.1-sol`, `gpt-6.1-terra` | `500000` |
+| `gpt-5.3-codex`, `gpt-5.4-mini`, `gpt-5.4-nano`, `gpt-5.4-pro`, `gpt-5.5-pro` | models.dev limit |
+
+These values mirror Pi's native `openai` and `openai-codex` catalogs.
+
+To opt into the full context limit reported by models.dev (currently `1050000` tokens for the OpenAI Codex GPT models), add this package-specific setting to global `~/.pi/agent/settings.json`:
 
 ```json
 {
@@ -98,7 +109,7 @@ Use `"full"` only when the selected CLIProxyAPI route and upstream account actua
 
 ### Model and display configuration
 
-Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.json` value. The tabbed panel has `Connection`, `Models`, and `Display` sections; it controls the GPT-5.6 context-window mode and whether the model selector shows the published strict tool-schema capability.
+Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.json` value. The tabbed panel has `Connection`, `Models`, and `Display` sections; it controls the Codex GPT context-window mode and whether the model selector shows the published strict tool-schema capability.
 
 ```json
 {
@@ -119,7 +130,7 @@ CLIProxyAPI's `/v1/models` response carries no effort data, so the provider deri
 
 An entry with only effort values means thinking cannot be disabled, so `off` maps to `null`. When the entry lists a `toggle` or `budget_tokens` option, `off` stays available. A budget-only entry leaves the map unset and keeps Pi's default budget mapping.
 
-GPT-5.6 and GPT-6 keep their hand-written maps.
+GPT-5.3 Codex, GPT-5.4, GPT-5.5, GPT-5.6, and GPT-6 keep their hand-written maps, mirroring Pi's native `openai` catalog.
 
 ## Authenticate
 
@@ -195,7 +206,7 @@ Project config reads `metadataFallbackProvider`, `modelAliases`, and `modelOverr
 
 Run `/cliproxyapi models` in Pi TUI mode to inspect the models in the current CPA snapshot. The selector shows the effective API, reasoning mode, and context window. The detail view also shows input modalities, cost, thinking levels, and the compatibility values that Pi will publish.
 
-Only `reasoning`, `contextWindow`, and `maxTokens` are editable. Values are constrained to safe presets; choose `auto` to remove an override and restore the derived value after reload. API routing and compatibility stay provider-owned: GPT-5.6/GPT-6 Codex models remain on `openai-responses` and Claude models on `anthropic-messages`, while the CLIProxyAPI workaround publishes `supportsStrictMode: false`.
+Only `reasoning`, `contextWindow`, and `maxTokens` are editable. Values are constrained to safe presets; choose `auto` to remove an override and restore the derived value after reload. API routing and compatibility stay provider-owned: Codex GPT models remain on `openai-responses` and Claude models on `anthropic-messages`, while the CLIProxyAPI workaround publishes `supportsStrictMode: false`.
 
 For CPA Responses requests, the extension also applies the Codex-compatible function-tool wire contract used by `pi-codex-conversion`: each function tool explicitly carries `strict: null`. This preserves optional tool arguments such as `interactive_shell.listBackground` without replacing CPA authentication, transport, discovery, or streaming with the ChatGPT-backed `openai-codex-responses` provider.
 

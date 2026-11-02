@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildProviderModels, PI_MODEL_DEFAULTS } from "../src/provider.ts";
 import type { CpaModel } from "../src/cpa.ts";
+import type { ModelsDevMetadata } from "../src/types.ts";
 
 const cpaModels: CpaModel[] = [
   { id: "gpt-5.5", object: "model", owned_by: "openai", created: 1776902400 },
@@ -56,7 +57,8 @@ test("enriches matched models but preserves CPA model IDs", () => {
   assert.equal(result.models[0].id, "gpt-5.5");
   assert.equal(result.models[0].name, "GPT-5.5");
   assert.deepEqual(result.models[0].input, ["text", "image"]);
-  assert.equal(result.models[0].contextWindow, 1050000);
+  assert.equal(result.models[0].api, "openai-responses");
+  assert.equal(result.models[0].contextWindow, 272000);
   assert.equal(result.models[1].id, "claude-opus-4-6-thinking");
   assert.equal(result.models[1].name, "Claude Opus 4.6");
   assert.equal(result.stats.enriched, 2);
@@ -105,22 +107,95 @@ test("adds the full thinking map to every GPT-5.6 model family member", () => {
   }
 });
 
-test("routes GPT-5.6 family models through the Responses API", () => {
-  const result = buildProviderModels([
-    { id: "gpt-5.6" },
-    { id: "gpt-5.6-codex" },
-    { id: "0xdev/gpt-5.6-codex-mini" },
+test("routes the Codex GPT families through the Responses API with their canonical context windows", () => {
+  const entry = (id: string, context: number, output = 128000): ModelsDevMetadata => ({
+    id: `openai/${id}`,
+    name: id,
+    reasoning: true,
+    modalities: { input: ["text", "image"], output: ["text"] },
+    limit: { context, output },
+  });
+  const familyIds = [
+    "gpt-5.3-codex",
+    "gpt-5.3-codex-spark",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.4-pro",
+    "gpt-5.5",
+    "gpt-5.5-pro",
+    "gpt-5.6-cyber",
+    "gpt-5.6-sol",
+    "gpt-6-astra",
+    "gpt-6.1-sol",
+  ];
+  const familyCatalog = Object.fromEntries([
+    ["openai/gpt-5.3-codex", entry("gpt-5.3-codex", 400000)],
+    ["openai/gpt-5.3-codex-spark", entry("gpt-5.3-codex-spark", 128000, 32000)],
+    ["openai/gpt-5.4", entry("gpt-5.4", 1050000)],
+    ["openai/gpt-5.4-mini", entry("gpt-5.4-mini", 400000)],
+    ["openai/gpt-5.4-nano", entry("gpt-5.4-nano", 400000)],
+    ["openai/gpt-5.4-pro", entry("gpt-5.4-pro", 1050000)],
+    ["openai/gpt-5.5", entry("gpt-5.5", 1050000)],
+    ["openai/gpt-5.5-pro", entry("gpt-5.5-pro", 1050000)],
+    ["openai/gpt-5.6-sol", entry("gpt-5.6-sol", 1050000)],
+    ["openai/gpt-6-astra", entry("gpt-6-astra", 1050000)],
+    ["openai/gpt-6.1-sol", entry("gpt-6.1-sol", 1050000)],
+  ]);
+  const cpaModels = familyIds.map((id) => ({ id, owned_by: "openai" }));
+
+  const result = buildProviderModels(cpaModels, familyCatalog, {});
+  assert.deepEqual(
+    result.models.map((model) => [model.id, model.api, model.contextWindow]),
+    [
+      ["gpt-5.3-codex", "openai-responses", 400000],
+      ["gpt-5.3-codex-spark", "openai-responses", 128000],
+      ["gpt-5.4", "openai-responses", 272000],
+      ["gpt-5.4-mini", "openai-responses", 400000],
+      ["gpt-5.4-nano", "openai-responses", 400000],
+      ["gpt-5.4-pro", "openai-responses", 1050000],
+      ["gpt-5.5", "openai-responses", 272000],
+      ["gpt-5.5-pro", "openai-responses", 1050000],
+      ["gpt-5.6-cyber", "openai-responses", 400000],
+      ["gpt-5.6-sol", "openai-responses", 272000],
+      ["gpt-6-astra", "openai-responses", 272000],
+      ["gpt-6.1-sol", "openai-responses", 500000],
+    ],
+  );
+
+  const full = buildProviderModels(cpaModels, familyCatalog, {}, "full");
+  assert.deepEqual(
+    full.models.map((model) => [model.id, model.contextWindow]),
+    [
+      ["gpt-5.3-codex", 400000],
+      ["gpt-5.3-codex-spark", 128000],
+      ["gpt-5.4", 1050000],
+      ["gpt-5.4-mini", 400000],
+      ["gpt-5.4-nano", 400000],
+      ["gpt-5.4-pro", 1050000],
+      ["gpt-5.5", 1050000],
+      ["gpt-5.5-pro", 1050000],
+      ["gpt-5.6-cyber", 400000],
+      ["gpt-5.6-sol", 1050000],
+      ["gpt-6-astra", 1050000],
+      ["gpt-6.1-sol", 1050000],
+    ],
+  );
+
+  const lookalikes = buildProviderModels([
     { id: "gpt-5.60" },
+    { id: "gpt-5.4x" },
+    { id: "chatgpt-5.5" },
     { id: "gemini-3-pro" },
   ], {}, {});
+  assert.deepEqual(lookalikes.models.map((model) => model.api), [undefined, undefined, undefined, undefined]);
 
-  assert.deepEqual(result.models.map((model) => model.api), [
-    "openai-responses",
-    "openai-responses",
-    "openai-responses",
-    undefined,
-    undefined,
-  ]);
+  assert.equal(result.models[0].thinkingLevelMap?.off, "none");
+  assert.equal(result.models[1].thinkingLevelMap?.off, null);
+  assert.equal(result.models[2].thinkingLevelMap?.max, null);
+  assert.equal(result.models[5].thinkingLevelMap?.low, null);
+  assert.equal(result.models[7].thinkingLevelMap?.off, null);
+  assert.equal(result.models[10].thinkingLevelMap?.off, null);
 });
 
 test("routes GPT-6 Astra through the Responses API with its own thinking map", () => {
@@ -140,10 +215,11 @@ test("routes GPT-6 Astra through the Responses API with its own thinking map", (
   ], {}, {});
 
   for (const model of result.models) {
+    const expectedContextWindow = model.id === "gpt-6.1-nova" ? 500000 : 272000;
     assert.equal(model.api, "openai-responses", `${model.id} should use openai-responses`);
     assert.equal(model.reasoning, true, `${model.id} should support reasoning`);
     assert.deepEqual(model.thinkingLevelMap, expectedThinkingLevelMap, `${model.id} thinking map`);
-    assert.equal(model.contextWindow, 272000, `${model.id} should use the canonical Codex context window`);
+    assert.equal(model.contextWindow, expectedContextWindow, `${model.id} should use the canonical Codex context window`);
   }
 });
 
@@ -199,7 +275,7 @@ test("routes every catalog Claude model through the Anthropic Messages API", () 
 test("leaves non-Claude, non-Codex-Responses models on the provider default API", () => {
   const result = buildProviderModels([
     { id: "gemini-3-pro" },
-    { id: "gpt-5.5" },
+    { id: "gpt-5.2" },
     { id: "gpt-image-2" },
     { id: "codex-auto-review" },
     { id: "not-claude-opus" },
