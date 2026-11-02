@@ -111,6 +111,16 @@ Run `/cliproxyapi config` in Pi TUI mode to edit every package-level `settings.j
 
 `showStrictMode` defaults to `false` because the selector stays compact for normal use. Enable it when diagnosing tool-schema behavior; model details always show `Strict tool schema` explicitly. Saving through `/cliproxyapi config` reloads Pi. Select `Connection` to open the endpoint and authentication editor.
 
+## Thinking levels
+
+Claude models use the Anthropic Messages API, where Pi sends thinking effort per turn. Pi offers `xhigh` and `max` only when a model publishes a `thinkingLevelMap`, and hides every level that the map sets to `null`.
+
+CLIProxyAPI's `/v1/models` response carries no effort data, so the provider derives the map from models.dev `reasoning_options` for Claude models only. It prefers the `anthropic/` entry named by `canonical_model_id`. Listed efforts map to themselves and any Pi level the model omits maps to `null`.
+
+An entry with only effort values means thinking cannot be disabled, so `off` maps to `null`. When the entry lists a `toggle` or `budget_tokens` option, `off` stays available. A budget-only entry leaves the map unset and keeps Pi's default budget mapping.
+
+GPT-5.6 and GPT-6 keep their hand-written maps.
+
 ## Authenticate
 
 Use pi's normal API-key login flow:

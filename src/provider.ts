@@ -80,11 +80,14 @@ function contextWindowForModel(
 function modelFromMetadata(
   cpaModel: CpaModel,
   metadata: ModelsDevMetadata,
+  catalog: ModelsDevCatalog,
   gpt56ContextWindow: Gpt56ContextWindowMode,
 ): ProviderModelConfigLike {
   const capabilityContext = {
     availableModelId: cpaModel.id,
     metadataModelId: metadata.id,
+    metadata,
+    catalog,
   };
   const capabilityOverrides = getModelCapabilityOverrides(capabilityContext);
   const api = getModelApiOverride(capabilityContext);
@@ -179,7 +182,7 @@ export function buildProviderModels(
     enriched += 1;
     matchMethods[match.method] += 1;
     return applyModelOverride(
-      modelFromMetadata(cpaModel, match.metadata, gpt56ContextWindow),
+      modelFromMetadata(cpaModel, match.metadata, catalog, gpt56ContextWindow),
       overrides,
     );
   });
