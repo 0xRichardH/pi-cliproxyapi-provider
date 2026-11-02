@@ -41,9 +41,9 @@
     "update:models-dev": "node scripts/update-models-dev-fallback.mjs"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.84.0",
-    "@earendil-works/pi-coding-agent": ">=0.84.0",
-    "@earendil-works/pi-tui": ">=0.84.0"
+    "@earendil-works/pi-ai": ">=0.87.0",
+    "@earendil-works/pi-coding-agent": ">=0.87.0",
+    "@earendil-works/pi-tui": ">=0.87.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

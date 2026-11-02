@@ -4,6 +4,8 @@
 
 ## Install
 
+Requires Pi 0.87.0 or later. Pi 0.86 kept tool declarations in transcript system messages and could drop them after a context handler or compaction, leaving the model without built-in tools. Pi 0.87.0 restores the full tool state ([#9846](https://github.com/earendil-works/pi/pull/9846)).
+
 Install from npm:
 
 ```bash
