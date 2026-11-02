@@ -37,6 +37,44 @@ function oneMatch(candidates: string[]): string | undefined {
   return unique.length === 1 ? unique[0] : undefined;
 }
 
+interface CatalogIndex {
+  idToKeys: Map<string, string[]>;
+  nameToKeys: Map<string, string[]>;
+  normNameToKeys: Map<string, string[]>;
+}
+
+const catalogIndexes = new WeakMap<object, CatalogIndex>();
+
+function appendKey(index: Map<string, string[]>, value: string, key: string): void {
+  const keys = index.get(value);
+  if (keys) keys.push(key);
+  else index.set(value, [key]);
+}
+
+function buildCatalogIndex(catalog: ModelsDevCatalog): CatalogIndex {
+  const index: CatalogIndex = {
+    idToKeys: new Map(),
+    nameToKeys: new Map(),
+    normNameToKeys: new Map(),
+  };
+  for (const key of Object.keys(catalog)) {
+    const metadata = catalog[key];
+    appendKey(index.idToKeys, metadata.id, key);
+    const name = metadataModelName(key, metadata);
+    appendKey(index.nameToKeys, name, key);
+    appendKey(index.normNameToKeys, normalizeModelName(name), key);
+  }
+  return index;
+}
+
+function getCatalogIndex(catalog: ModelsDevCatalog): CatalogIndex {
+  const cached = catalogIndexes.get(catalog);
+  if (cached) return cached;
+  const index = buildCatalogIndex(catalog);
+  catalogIndexes.set(catalog, index);
+  return index;
+}
+
 function identifierTokens(value: string): string[] {
   return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
@@ -97,20 +135,16 @@ export function findMetadataMatch(
     return { metadataId: cpaModel.id, metadata: catalog[cpaModel.id], method: "exact" };
   }
 
-  const catalogKeys = Object.keys(catalog);
-  const exactMetadataCandidates = catalogKeys.filter((key) => catalog[key]?.id === cpaModel.id);
+  const index = getCatalogIndex(catalog);
+  const exactMetadataCandidates = index.idToKeys.get(cpaModel.id) ?? [];
   const exactMetadataKey = oneMatch(exactMetadataCandidates);
   if (exactMetadataKey) {
     return { metadataId: exactMetadataKey, metadata: catalog[exactMetadataKey], method: "exact" };
   }
 
-  const suffixCandidates = catalogKeys.filter((key) =>
-    metadataModelName(key, catalog[key]) === cpaModel.id
-  );
+  const suffixCandidates = index.nameToKeys.get(cpaModel.id) ?? [];
   const normalizedId = normalizeModelName(cpaModel.id);
-  const normalizedSuffixCandidates = catalogKeys.filter(
-    (key) => normalizeModelName(metadataModelName(key, catalog[key])) === normalizedId,
-  );
+  const normalizedSuffixCandidates = index.normNameToKeys.get(normalizedId) ?? [];
   const owner = cpaModel.owned_by?.trim().toLowerCase();
   const canonicalOwner = owner ? CANONICAL_OWNER_PREFIXES[owner] : undefined;
   if (canonicalOwner) {
