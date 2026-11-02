@@ -18,28 +18,29 @@ const bundledModelsDevPath = join(packageRoot, "data", "models-dev-fallback.json
 
 export default async function (pi: ExtensionAPI) {
   let config = DEFAULT_CONFIG;
+  let runtime: ProviderRuntime | undefined;
+  let catalog: ProviderCatalog | undefined;
   try {
     const cwd = process.cwd();
     config = loadConfig(cwd);
     const settings = loadProviderSettings(cwd);
-    const catalog = new ProviderCatalog({
+    const nextCatalog = new ProviderCatalog({
       config,
       gpt56ContextWindow: settings.gpt56ContextWindow,
       bundledModelsDevPath,
       getApiKey: () => getDiscoveryApiKey(config.providerName),
     });
-    const runtime = new ProviderRuntime({ pi, config, catalog });
-    registerCodexCompatiblePayloadAdapter(pi, config.providerName);
-    registerCliproxyapiCommand(pi, runtime, catalog);
-    registerGatewayTelemetry(pi as never);
-    await runtime.start();
+    const nextRuntime = new ProviderRuntime({ pi, config, catalog: nextCatalog });
+    await nextRuntime.start();
+    catalog = nextCatalog;
+    runtime = nextRuntime;
   } catch (error) {
-    registerCodexCompatiblePayloadAdapter(pi, config.providerName);
-    registerCliproxyapiCommand(pi);
-    registerGatewayTelemetry(pi as never);
     pi.registerProvider(config.providerName, buildProviderRegistration(config, buildUnavailableProviderModels()).config);
     console.warn(`[pi-cliproxyapi-provider] registered placeholder provider after startup failure: ${error instanceof Error ? error.message : String(error)}`);
   }
+  registerCodexCompatiblePayloadAdapter(pi, config.providerName);
+  registerCliproxyapiCommand(pi, runtime, catalog);
+  registerGatewayTelemetry(pi as never);
 }
 
 
