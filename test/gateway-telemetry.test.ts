@@ -68,3 +68,34 @@ test("registerGatewayTelemetry notifies tok/s captured from Response headers", a
     globalThis.fetch = originalFetch;
   }
 });
+
+test("registerGatewayTelemetry suppresses notification when no tok/s was captured", async () => {
+  const originalFetch = globalThis.fetch;
+  const handlers: Record<string, (...args: unknown[]) => void> = {};
+  const { registerGatewayTelemetry } = await import("../src/gateway-telemetry.ts");
+  registerGatewayTelemetry({
+    on(event: string, handler: (...args: unknown[]) => void) {
+      handlers[event] = handler;
+    },
+  } as never);
+
+  globalThis.fetch = (async () =>
+    new Response("{}", { headers: {} })) as typeof fetch;
+
+  try {
+    handlers.session_start?.();
+    await globalThis.fetch("https://gateway.example/v1/chat/completions");
+    let notified = false;
+    handlers.agent_settled?.({}, {
+      ui: {
+        notify: () => {
+          notified = true;
+        },
+      },
+    });
+    assert.equal(notified, false);
+  } finally {
+    handlers.session_shutdown?.();
+    globalThis.fetch = originalFetch;
+  }
+});
