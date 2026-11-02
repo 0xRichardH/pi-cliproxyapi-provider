@@ -29,12 +29,19 @@ export interface CpaProviderConfig {
   modelOverrides: ProviderModelOverrides;
 }
 
+export interface ModelsDevReasoningOption {
+  type?: string;
+  values?: string[];
+}
+
 export interface ModelsDevMetadata {
   id: string;
   /** models.dev provider key retained for owner-hint matching. */
   sourceProvider?: string;
   name?: string;
   reasoning?: boolean;
+  reasoning_options?: ModelsDevReasoningOption[];
+  canonical_model_id?: string;
   modalities?: {
     input?: string[];
     output?: string[];

@@ -1,9 +1,12 @@
-import type { ThinkingLevelMap } from "@earendil-works/pi-ai";
-import { isGpt6Model } from "./model-api.ts";
+import type { ThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
+import { getModelApiOverride, isGpt6Model } from "./model-api.ts";
+import type { ModelsDevCatalog, ModelsDevMetadata } from "./types.ts";
 
 export interface ModelCapabilityContext {
   availableModelId: string;
   metadataModelId?: string;
+  metadata?: ModelsDevMetadata;
+  catalog?: ModelsDevCatalog;
 }
 
 export interface ModelCapabilityOverrides {
@@ -13,7 +16,7 @@ export interface ModelCapabilityOverrides {
 
 interface ModelCapabilityRule {
   matches: (context: ModelCapabilityContext) => boolean;
-  overrides: ModelCapabilityOverrides;
+  overrides: (context: ModelCapabilityContext) => ModelCapabilityOverrides;
 }
 
 const GPT_5_6_THINKING_LEVEL_MAP: ThinkingLevelMap = {
@@ -42,25 +45,54 @@ const GPT_6_THINKING_LEVEL_MAP: ThinkingLevelMap = {
   max: "max",
 };
 
+const PI_EFFORT_LEVELS: readonly ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+
 function includesModelFamily(context: ModelCapabilityContext, family: string): boolean {
   return [context.availableModelId, context.metadataModelId]
     .filter((id): id is string => id !== undefined)
     .some((id) => id.includes(family));
 }
 
+function reasoningMetadata(context: ModelCapabilityContext): ModelsDevMetadata | undefined {
+  const metadata = context.metadata;
+  if (!metadata) return undefined;
+  const canonicalId = metadata.canonical_model_id;
+  return (canonicalId ? context.catalog?.[canonicalId] : undefined) ?? metadata;
+}
+
+function thinkingLevelMapFromReasoningOptions(metadata: ModelsDevMetadata | undefined): ThinkingLevelMap | undefined {
+  const options = metadata?.reasoning_options;
+  if (!Array.isArray(options)) return undefined;
+  const effort = options.find((option) => option?.type === "effort" && Array.isArray(option.values));
+  if (!effort?.values) return undefined;
+  const accepted = new Set(effort.values);
+  const map: ThinkingLevelMap = {};
+  for (const level of PI_EFFORT_LEVELS) map[level] = accepted.has(level) ? level : null;
+  if (accepted.has("none")) map.off = "none";
+  else if (options.every((option) => option?.type === "effort")) map.off = null;
+  return map;
+}
+
 const MODEL_CAPABILITY_RULES: readonly ModelCapabilityRule[] = [
   {
     matches: (context) => includesModelFamily(context, "gpt-5.6"),
-    overrides: {
+    overrides: () => ({
       reasoning: true,
       thinkingLevelMap: GPT_5_6_THINKING_LEVEL_MAP,
-    },
+    }),
   },
   {
     matches: (context) => isGpt6Model(context),
-    overrides: {
+    overrides: () => ({
       reasoning: true,
       thinkingLevelMap: GPT_6_THINKING_LEVEL_MAP,
+    }),
+  },
+  {
+    matches: (context) => getModelApiOverride(context) === "anthropic-messages",
+    overrides: (context) => {
+      const thinkingLevelMap = thinkingLevelMapFromReasoningOptions(reasoningMetadata(context));
+      return thinkingLevelMap ? { thinkingLevelMap } : {};
     },
   },
 ];
@@ -70,8 +102,9 @@ export function getModelCapabilityOverrides(context: ModelCapabilityContext): Mo
 
   for (const rule of MODEL_CAPABILITY_RULES) {
     if (!rule.matches(context)) continue;
-    if (rule.overrides.reasoning !== undefined) resolved.reasoning = rule.overrides.reasoning;
-    if (rule.overrides.thinkingLevelMap) resolved.thinkingLevelMap = { ...rule.overrides.thinkingLevelMap };
+    const overrides = rule.overrides(context);
+    if (overrides.reasoning !== undefined) resolved.reasoning = overrides.reasoning;
+    if (overrides.thinkingLevelMap) resolved.thinkingLevelMap = { ...overrides.thinkingLevelMap };
   }
 
   return resolved;
