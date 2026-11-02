@@ -1,0 +1,458 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SKILL_DIR=$(dirname "$SCRIPT_DIR")
+REPO=$(cd "$SKILL_DIR/../../.." && pwd)
+RUN_ROOT=${CPA_VERIFY_RUN_ROOT:-/tmp/cpa-verify}
+CURRENT_FILE="$RUN_ROOT/current"
+KEY=${CPA_VERIFY_API_KEY:-verify-key}
+
+fail() {
+  echo "cpa-verify: $*" >&2
+  exit 1
+}
+
+slug() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//; s/-$//' | cut -c1-60
+}
+
+resolve_run() {
+  if [ -n "${CPA_VERIFY_RUN:-}" ]; then
+    RUN=$CPA_VERIFY_RUN
+  elif [ -f "$CURRENT_FILE" ]; then
+    RUN=$(cat "$CURRENT_FILE")
+  else
+    fail "no active run; run 'cpa-verify start' first"
+  fi
+  [ -f "$RUN/run.env" ] || fail "run.env missing in $RUN; run 'cpa-verify start'"
+  # shellcheck disable=SC1090
+  source "$RUN/run.env"
+}
+
+pi_env() {
+  env \
+    HOME="$HOME_DIR" \
+    CLIPROXYAPI_BASE_URL="http://127.0.0.1:$PORT/v1" \
+    CLIPROXYAPI_API_KEY="$KEY" \
+    CLIPROXYAPI_AUTH_REQUIRED=true \
+    "$@"
+}
+
+pi_flags() {
+  printf '%s\n' --no-extensions --no-mcp --no-skills --no-prompt-templates --no-context-files -e "$REPO"
+}
+
+wait_for_port() {
+  local deadline=$((SECONDS + 15))
+  while [ ! -s "$RUN/server/port" ]; do
+    [ $SECONDS -ge $deadline ] && fail "fake server did not write a port; see $RUN/server/server.log"
+    sleep 0.1
+  done
+  PORT=$(cat "$RUN/server/port")
+}
+
+wait_for_server() {
+  local deadline=$((SECONDS + 15))
+  until curl -fsS "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1; do
+    [ $SECONDS -ge $deadline ] && fail "fake server is not answering on 127.0.0.1:$PORT"
+    sleep 0.2
+  done
+}
+
+wait_for_tui() {
+  local deadline=$((SECONDS + 30))
+  while :; do
+    local pane
+    pane=$(tmux capture-pane -p -t "$SESSION" 2>/dev/null || true)
+    case "$pane" in
+      *"escape interrupt"*) return 0 ;;
+      *"Trust project folder"*) fail "pi is waiting at the trust prompt; start must pass -a" ;;
+    esac
+    [ $SECONDS -ge $deadline ] && {
+      printf '%s\n' "$pane" >&2
+      fail "pi TUI did not become ready in 30s"
+    }
+    sleep 0.2
+  done
+}
+
+wait_for_cache() {
+  local deadline=$((SECONDS + 30))
+  while ! find "$RUN/home/.cache/pi-cliproxyapi-provider" -name cpa-models.json -print -quit 2>/dev/null | grep -q .; do
+    [ $SECONDS -ge $deadline ] && fail "model discovery did not write a CPA snapshot; check $RUN/server/requests.jsonl"
+    sleep 0.2
+  done
+}
+
+start_tui() {
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  tmux new-session -d -s "$SESSION" -x 160 -y 50 -c "$RUN/work" \
+    -e HOME="$HOME_DIR" \
+    -e CLIPROXYAPI_BASE_URL="http://127.0.0.1:$PORT/v1" \
+    -e CLIPROXYAPI_API_KEY="$KEY" \
+    -e CLIPROXYAPI_AUTH_REQUIRED=true \
+    -e TERM=xterm-256color \
+    "exec pi --no-extensions --no-mcp --no-skills --no-prompt-templates --no-context-files -e '$REPO' --no-session -a"
+  wait_for_tui
+}
+
+write_env() {
+  cat > "$RUN/run.env" <<EOF
+RUN_DIR='$RUN'
+HOME_DIR='$RUN/home'
+WORK_DIR='$RUN/work'
+ARTIFACTS='$RUN/artifacts'
+SESSION='$SESSION'
+PORT='$PORT'
+SERVER_PID='$SERVER_PID'
+REPO='$REPO'
+PI_VERSION='$(pi --version 2>/dev/null | head -1)'
+STARTED_AT='$(date -Is)'
+EOF
+}
+
+cleanup_failed_start() {
+  if [ -n "${SESSION:-}" ]; then tmux kill-session -t "$SESSION" 2>/dev/null || true; fi
+  if [ -n "${SERVER_PID:-}" ]; then kill "$SERVER_PID" 2>/dev/null || true; fi
+  if [ -n "${RUN:-}" ] && [ "$(cat "$CURRENT_FILE" 2>/dev/null || true)" = "$RUN" ]; then rm -f "$CURRENT_FILE"; fi
+}
+
+cmd_start() {
+  local id=${1:-$(date +%Y%m%d-%H%M%S)-$$}
+  RUN="$RUN_ROOT/$id"
+  [ -e "$RUN/run.env" ] && fail "run already exists: $RUN"
+  HOME_DIR="$RUN/home"
+  WORK_DIR="$RUN/work"
+  ARTIFACTS="$RUN/artifacts"
+  SESSION="cpa-verify-$(basename "$RUN")"
+  trap cleanup_failed_start ERR
+  mkdir -p "$HOME_DIR" "$WORK_DIR" "$ARTIFACTS" "$RUN/server"
+  : > "$RUN/server/requests.jsonl"
+  rm -f "$RUN/server/port"
+  PORT=0 PORT_FILE="$RUN/server/port" REQLOG="$RUN/server/requests.jsonl" \
+    node "$SCRIPT_DIR/fake-cpa-server.mjs" > "$RUN/server/server.log" 2>&1 &
+  SERVER_PID=$!
+  wait_for_port
+  wait_for_server
+  write_env
+  echo "$RUN" > "$CURRENT_FILE"
+  start_tui
+  tmux capture-pane -p -t "$SESSION" -S -300 > "$RUN/artifacts/00-start.txt"
+  echo "run:     $RUN"
+  echo "session: $SESSION"
+  echo "upstream: http://127.0.0.1:$PORT/v1"
+  echo "home:    $HOME_DIR"
+  echo "work:    $WORK_DIR"
+  echo "evidence: $RUN/artifacts"
+  wait_for_cache
+  echo "models:  $(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log(j.data.length)' "$(find "$RUN/home/.cache/pi-cliproxyapi-provider" -name cpa-models.json -print -quit)") discovered"
+  trap - ERR
+}
+
+cmd_stop() {
+  resolve_run
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmux capture-pane -p -t "$SESSION" -S -300 > "$RUN/artifacts/99-final-pane.txt" || true
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    echo "stopped session $SESSION"
+  fi
+  if kill -0 "$SERVER_PID" 2>/dev/null; then
+    local cmdline
+    cmdline=$(ps -p "$SERVER_PID" -o command= 2>/dev/null || true)
+    case "$cmdline" in
+      *fake-cpa-server.mjs*) kill "$SERVER_PID" 2>/dev/null || true ;;
+      *) echo "refusing to kill pid $SERVER_PID: $cmdline" >&2 ;;
+    esac
+    local deadline=$((SECONDS + 3))
+    while kill -0 "$SERVER_PID" 2>/dev/null && [ $SECONDS -lt $deadline ]; do sleep 0.1; done
+    kill -9 "$SERVER_PID" 2>/dev/null || true
+    echo "stopped fake upstream pid $SERVER_PID"
+  fi
+  if [ "$(cat "$CURRENT_FILE" 2>/dev/null || true)" = "$RUN" ]; then
+    rm -f "$CURRENT_FILE"
+  fi
+  echo "evidence kept: $RUN/artifacts"
+}
+
+cmd_restart() {
+  resolve_run
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmux capture-pane -p -t "$SESSION" -S -300 > "$RUN/artifacts/98-before-restart.txt" || true
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+  fi
+  start_tui
+  wait_for_cache
+  echo "$RUN" > "$CURRENT_FILE"
+  echo "restarted $SESSION against http://127.0.0.1:$PORT/v1"
+}
+
+cmd_doctor() {
+  resolve_run
+  local failures=0
+  check() {
+    local label=$1
+    shift
+    if "$@"; then
+      echo "PASS  $label"
+    else
+      echo "FAIL  $label"
+      failures=$((failures + 1))
+    fi
+  }
+  check "run.env present" test -f "$RUN/run.env"
+  check "HOME isolated inside run" bash -c "case \"$HOME_DIR\" in \"$RUN\"/*) exit 0;; *) exit 1;; esac"
+  check "fake upstream process alive" kill -0 "$SERVER_PID"
+  check "fake upstream answers /v1/models" bash -c "curl -fsS 'http://127.0.0.1:$PORT/v1/models' >/dev/null"
+  local fixture_count
+  fixture_count=$(curl -fsS "http://127.0.0.1:$PORT/v1/models" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).data.length)}catch{console.log(0)}})' || echo 0)
+  check "fixture catalog has 4 models" test "$fixture_count" -eq 4
+  local cache
+  cache=$(find "$RUN/home/.cache/pi-cliproxyapi-provider" -name cpa-models.json -print -quit 2>/dev/null || true)
+  check "CPA snapshot cache exists" test -n "$cache"
+  check "tmux session alive" tmux has-session -t "$SESSION"
+  check "pi TUI rendered" bash -c "tmux capture-pane -p -t '$SESSION' 2>/dev/null | grep -q 'escape interrupt'"
+  check "extension entry exists" test -f "$REPO/extensions/index.ts"
+  local current_version
+  current_version=$(pi --version 2>/dev/null | head -1)
+  check "pi version matches recorded" test "$current_version" = "$PI_VERSION"
+  echo "info  upstream: http://127.0.0.1:$PORT/v1"
+  echo "info  evidence: $RUN/artifacts"
+  [ $failures -eq 0 ] || fail "$failures doctor check(s) failed"
+}
+
+free_artifact_name() {
+  local base=$1
+  [ ! -e "$RUN/artifacts/$base.txt" ] && { printf '%s' "$base"; return; }
+  local n=2
+  while [ -e "$RUN/artifacts/$base-$n.txt" ]; do n=$((n + 1)); done
+  printf '%s' "$base-$n"
+}
+
+cmd_capture() {
+  resolve_run
+  local name
+  if [ $# -ge 1 ]; then name=$1; else name=$(free_artifact_name capture); fi
+  local path="$RUN/artifacts/$name.txt"
+  mkdir -p "$(dirname "$path")"
+  tmux capture-pane -p -t "$SESSION" -S -300 > "$path"
+  cat "$path"
+  echo "ARTIFACT $path" >&2
+}
+
+cmd_send() {
+  resolve_run
+  [ $# -ge 1 ] || fail "usage: cpa-verify send <text> [artifact-name]"
+  local text=$1
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name "$(slug "$text")"); fi
+  tmux send-keys -t "$SESSION" "$text" Enter
+  sleep "${CPA_VERIFY_WAIT:-3}"
+  cmd_capture "$name"
+}
+
+cmd_key() {
+  resolve_run
+  [ $# -ge 1 ] || fail "usage: cpa-verify key <Key> [artifact-name]"
+  local key=$1
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name "key-$(slug "$key")"); fi
+  tmux send-keys -t "$SESSION" "$key"
+  sleep "${CPA_VERIFY_WAIT:-1}"
+  cmd_capture "$name"
+}
+
+cmd_wait() {
+  resolve_run
+  [ $# -ge 1 ] || fail "usage: cpa-verify wait <seconds> [artifact-name]"
+  sleep "$1"
+  if [ $# -ge 2 ]; then cmd_capture "$2"; fi
+}
+
+cmd_list_models() {
+  resolve_run
+  local search=${1:-cpa}
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name list-models); fi
+  local path="$RUN/artifacts/$name.txt"
+  mkdir -p "$(dirname "$path")"
+  set +e
+  (cd "$RUN/work" && pi_env pi $(pi_flags) --list-models "$search") 2>&1 | tee "$path"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  echo "EXIT $rc"
+  echo "ARTIFACT $path" >&2
+  return $rc
+}
+
+cmd_chat() {
+  resolve_run
+  [ $# -ge 2 ] || fail "usage: cpa-verify chat <provider/model> <prompt> [artifact-name]"
+  local model=$1
+  local prompt=$2
+  local name
+  if [ $# -ge 3 ]; then name=$3; else name=$(free_artifact_name "chat-$(slug "$model")"); fi
+  local path="$RUN/artifacts/$name.txt"
+  local before
+  before=$(wc -l < "$RUN/server/requests.jsonl")
+  mkdir -p "$(dirname "$path")"
+  set +e
+  (cd "$RUN/work" && pi_env pi $(pi_flags) --no-session -p "$prompt" --model "$model") 2>&1 | tee "$path"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  sleep 1
+  echo "--- upstream requests for this call ---"
+  tail -n +$((before + 1)) "$RUN/server/requests.jsonl" | node "$SCRIPT_DIR/summarize-requests.mjs" /dev/stdin 20 || true
+  echo "EXIT $rc"
+  echo "ARTIFACT $path" >&2
+  return $rc
+}
+
+cmd_requests() {
+  resolve_run
+  node "$SCRIPT_DIR/summarize-requests.mjs" "$RUN/server/requests.jsonl" "${1:-10}"
+}
+
+cmd_catalog() {
+  resolve_run
+  local action=${1:-show}
+  local base="http://127.0.0.1:$PORT"
+  case "$action" in
+    show)
+      curl -fsS "$base/__verify/models"
+      echo
+      ;;
+    reset)
+      curl -fsS -X POST "$base/__verify/reset"
+      echo
+      ;;
+    set)
+      [ $# -ge 2 ] || fail "usage: cpa-verify catalog set <json-file>"
+      curl -fsS -X PUT -H 'content-type: application/json' --data-binary "@$2" "$base/__verify/models"
+      echo
+      ;;
+    add)
+      [ $# -ge 2 ] || fail "usage: cpa-verify catalog add <model-id> [owned_by]"
+      node --input-type=module -e '
+        const [base, id, owner] = process.argv.slice(1);
+        const current = await (await fetch(`${base}/__verify/models`)).json();
+        current.data.push({ id, object: "model", ...(owner ? { owned_by: owner } : {}) });
+        const response = await fetch(`${base}/__verify/models`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(current),
+        });
+        console.log(await response.text());
+      ' "$base" "$2" "${3:-}" 
+      ;;
+    fail)
+      [ $# -ge 2 ] || fail "usage: cpa-verify catalog fail <http-status>"
+      curl -fsS -X PUT -H 'content-type: application/json' -d "{\"status\":$2}" "$base/__verify/models-status"
+      echo
+      ;;
+    *)
+      fail "usage: cpa-verify catalog <show|reset|set|add|fail>"
+      ;;
+  esac
+}
+
+cmd_config() {
+  resolve_run
+  local action=${1:-show}
+  local dir="$RUN/work/.pi/pi-cliproxyapi-provider"
+  case "$action" in
+    show)
+      cat "$dir/config.json" 2>/dev/null || echo "(no project config)"
+      ;;
+    write)
+      [ $# -ge 2 ] || fail "usage: cpa-verify config write <json-file>"
+      mkdir -p "$dir"
+      cp "$2" "$dir/config.json"
+      echo "wrote $dir/config.json"
+      ;;
+    clear)
+      rm -rf "$dir"
+      echo "cleared $dir"
+      ;;
+    *)
+      fail "usage: cpa-verify config <show|write|clear>"
+      ;;
+  esac
+}
+
+cmd_settings() {
+  resolve_run
+  local action=${1:-show}
+  case "$action" in
+    show)
+      cat "$HOME_DIR/.pi/agent/settings.json" 2>/dev/null || echo "(no global settings)"
+      ;;
+    clear)
+      rm -f "$HOME_DIR/.pi/agent/settings.json" "$WORK_DIR/.pi/settings.json"
+      echo "cleared provider settings"
+      ;;
+    *)
+      fail "usage: cpa-verify settings <show|clear>"
+      ;;
+  esac
+}
+
+cmd_reset() {
+  resolve_run
+  rm -rf "$WORK_DIR/.pi/pi-cliproxyapi-provider"
+  rm -f "$WORK_DIR/.pi/settings.json" "$HOME_DIR/.pi/agent/settings.json" "$HOME_DIR/.pi/agent/pi-cliproxyapi-provider/config.json"
+  curl -fsS -X POST "http://127.0.0.1:$PORT/__verify/reset" >/dev/null
+  echo "reset project config, provider settings, connection config, and fake catalog"
+  cmd_restart
+}
+
+cmd_env() {
+  resolve_run
+  cat "$RUN/run.env"
+}
+
+usage() {
+  cat <<EOF
+usage: cpa-verify <command> [args]
+
+  start [run-id]              start fake CLIProxyAPI and a pi TUI in tmux
+  stop                        stop the tmux session and fake upstream, keep artifacts
+  restart                     restart only the pi TUI against the same upstream
+  reset                       clear project config, settings, connection config, and catalog, then restart
+  doctor                      read-only readiness checks for the active run
+  send <text> [name]          type a TUI command, press Enter, capture the pane
+  key <Key> [name]            send one tmux key (Enter, Escape, Tab, Down, C-c)
+  wait <seconds> [name]       wait, then capture the pane
+  capture [name]              capture the current pane to artifacts/<name>.txt
+  list-models [search] [name] run pi --list-models non-interactively
+  chat <model> <prompt> [name] run pi -p non-interactively and print the upstream request
+  requests [n]                summarize the last n upstream requests
+  catalog <show|reset|set|add|fail> [arg]
+  config <show|write|clear> [file]
+  settings <show|clear>       inspect or clear provider settings.json
+  env                         print the active run environment
+
+Set CPA_VERIFY_RUN to drive a run other than \$RUN_ROOT/current.
+Set CPA_VERIFY_WAIT to change the post-action settle time in seconds.
+EOF
+}
+
+case "${1:-}" in
+  start) shift; cmd_start "$@" ;;
+  stop) shift; cmd_stop "$@" ;;
+  restart) shift; cmd_restart "$@" ;;
+  reset) shift; cmd_reset "$@" ;;
+  doctor) shift; cmd_doctor "$@" ;;
+  send) shift; cmd_send "$@" ;;
+  key) shift; cmd_key "$@" ;;
+  wait) shift; cmd_wait "$@" ;;
+  capture) shift; cmd_capture "$@" ;;
+  list-models) shift; cmd_list_models "$@" ;;
+  chat) shift; cmd_chat "$@" ;;
+  requests) shift; cmd_requests "$@" ;;
+  catalog) shift; cmd_catalog "$@" ;;
+  config) shift; cmd_config "$@" ;;
+  settings) shift; cmd_settings "$@" ;;
+  env) shift; cmd_env "$@" ;;
+  *) usage; exit 1 ;;
+esac
