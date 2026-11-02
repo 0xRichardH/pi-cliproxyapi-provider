@@ -142,7 +142,7 @@ function providerSettingsItems(
   if (tab === "Models") return [
     {
       id: "gpt56ContextWindow",
-      label: "GPT-5.6 context window",
+      label: "Codex GPT context window",
       description: "canonical advertises 272000 tokens; full uses the models.dev limit.",
       currentValue: settings.gpt56ContextWindow,
       values: ["canonical", "full"],
