@@ -141,7 +141,3 @@ Set `CPA_VERIFY_RUN` to drive a run other than `/tmp/cpa-verify/current`. Set `C
 ## Feature map
 
 Read [features/README.md](features/README.md) before choosing a journey. It indexes the maintained feature files and the baseline fixtures.
-
-## Known failures
-
-- The model inspector can save an effective value that is not an allowed override preset. In `full` context mode the first non-auto value is the derived models.dev limit (`1050000` for the fixtures); canonical windows for other families (`400000`, `500000`) and out-of-preset max-token values fail the same way. The next reload reports `modelOverrides.<id>.<field> must be one of ...`, and `--list-models` then shows only `login-required`. See `features/aliases-and-overrides.md` under Gotchas for the repro and recovery.

@@ -39,6 +39,6 @@ Preconditions:
 - If the model is not registered, pi falls back to a custom model ID on the provider-default API and the routing assertion becomes meaningless. Run `list-models` first.
 - Claude requests carry `?beta=true` and target `/v1/messages`, not `/v1/chat/completions`. The fake upstream routes by pathname and ignores the query string.
 - The package strips a trailing `/v1` from the provider base URL for Claude models because pi appends `/v1/messages`. A wrong base URL shows up as a 404 at `/v1/v1/messages`.
-- An alias can change the selected API because the alias target feeds the same family match. Use a Claude-named fixture for Anthropic proof: the base-URL strip and adaptive thinking are keyed on the discovered model ID, so a non-Claude ID aliased to Claude metadata selects `anthropic-messages` but requests `/v1/v1/messages` without adaptive thinking.
+- An alias can change the selected API because the alias target feeds the same family match. The Anthropic base URL and adaptive thinking follow the selected API, so a non-Claude ID aliased to Claude metadata routes to `/v1/messages` with adaptive thinking.
 - The request body is truncated to 20 KB in the log. Enough of the tool list remains to inspect `strict`, but very large prompts will be cut.
 - Parallel `chat` calls interleave in the request log and make the per-call slice ambiguous.
