@@ -1,6 +1,5 @@
 import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ProviderConfig, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import { isClaudeModel } from "./model-api.ts";
 import type { CpaProviderConfig } from "./types.ts";
 import type { ProviderModelConfigLike } from "./types.ts";
 
@@ -35,9 +34,8 @@ export function normalizeProviderModels(
     compat: {
       ...model.compat,
       supportsStrictMode: false,
-      // Claude models run on the Anthropic Messages API (see model-api.ts) and
-      // use the same adaptive thinking path pi uses for anthropic/* models, so
-      // effort rides on a top-level `output_config`.
+      // Anthropic Messages models use the same adaptive thinking path pi uses
+      // for anthropic/* models, so effort rides on a top-level `output_config`.
       //
       // `supportsMidConvoEffort` is deliberately NOT set. It makes pi attach a
       // per-message `output_config` to synthesized system messages behind the
@@ -45,11 +43,11 @@ export function normalizeProviderModels(
       // beta and rejects the request with
       // `messages.N.output_config: Extra inputs are not permitted`. Top-level
       // `output_config` is accepted, so adaptive thinking still works.
-      ...(isClaudeModel({ availableModelId: model.id })
+      ...(model.api === "anthropic-messages"
         ? { forceAdaptiveThinking: true }
         : {}),
     },
-    ...(providerBaseUrl && isClaudeModel({ availableModelId: model.id })
+    ...(providerBaseUrl && model.api === "anthropic-messages"
       ? { baseUrl: anthropicBaseUrl(providerBaseUrl) }
       : {}),
   }));

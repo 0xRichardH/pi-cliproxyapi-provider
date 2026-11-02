@@ -212,7 +212,7 @@ Only `reasoning`, `contextWindow`, and `maxTokens` are editable. Values are cons
 
 For CPA Responses requests, the extension also applies the Codex-compatible function-tool wire contract used by `pi-codex-conversion`: each function tool explicitly carries `strict: null`. This preserves optional tool arguments such as `interactive_shell.listBackground` without replacing CPA authentication, transport, discovery, or streaming with the ChatGPT-backed `openai-codex-responses` provider.
 
-Saving writes to an existing project config when present, otherwise to the global provider config, then reloads Pi. Project overrides take precedence over global overrides field by field.
+Saving writes the project config and reloads Pi. Project overrides take precedence over global overrides field by field; choose `auto` to remove an override.
 
 ## Snapshots and startup
 

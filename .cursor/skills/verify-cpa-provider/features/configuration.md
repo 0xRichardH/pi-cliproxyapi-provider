@@ -42,7 +42,6 @@ Preconditions:
 - Panel tab order is Connection, then Models, then Display, then back to Connection.
 - The panel writes to project `.pi/settings.json` when it exists, otherwise to `home/.pi/agent/settings.json`. This harness has no project settings, so the global file is the expected destination.
 - The auth-header prompt appears only when auth is required. Choosing `No` for auth skips it and writes `authHeader: false`.
-- Full context mode plus the model inspector can write an invalid override. See `aliases-and-overrides.md` under Gotchas; keep the inspector journey in canonical mode.
 - `showStrictMode` only adds a strict column to `/cliproxyapi models`. It does not change registration, requests, or the `--list-models` table.
 - `config clear` and `settings clear` leave the global connection config written by the connection editor. Use `cpa-verify reset` to return the whole run to baseline.
 - The connection editor writes global config under the run's isolated `HOME`. It never touches the real user config.

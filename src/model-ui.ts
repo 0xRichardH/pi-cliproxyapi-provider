@@ -20,8 +20,8 @@ function modelOverride(model: ProviderModelConfigLike, overrides: Record<string,
   return overrides[model.id] ?? {};
 }
 
-function valuesFor(current: number, presets: number[]): string[] {
-  return ["auto", ...new Set([current, ...presets]).values()].map(String);
+function valuesFor(presets: readonly number[]): string[] {
+  return ["auto", ...presets.map(String)];
 }
 
 function effectiveReasoning(model: ProviderModelConfigLike, override: ProviderModelOverrideLayer): boolean {
@@ -63,14 +63,14 @@ function detailItems(model: ProviderModelConfigLike, override: ProviderModelOver
       label: "Context window",
       description: `Effective: ${contextWindow} tokens. ${override.contextWindow === undefined ? "Derived default." : "User override."}`,
       currentValue: typeof override.contextWindow !== "number" ? "auto" : String(override.contextWindow),
-      values: valuesFor(contextWindow, [...CONTEXT_WINDOW_PRESETS]),
+      values: valuesFor(CONTEXT_WINDOW_PRESETS),
     },
     {
       id: "maxTokens",
       label: "Max output tokens",
       description: `Effective: ${maxTokens} tokens. ${override.maxTokens === undefined ? "Derived default." : "User override."}`,
       currentValue: typeof override.maxTokens !== "number" ? "auto" : String(override.maxTokens),
-      values: valuesFor(maxTokens, [...MAX_TOKEN_PRESETS]),
+      values: valuesFor(MAX_TOKEN_PRESETS),
     },
   ];
 }
