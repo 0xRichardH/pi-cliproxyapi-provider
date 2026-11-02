@@ -36,8 +36,7 @@ Preconditions:
 - On a completely empty cache, the first process registers `login-required` until background discovery finishes. Wait for `cpa-verify start` to report `4 discovered`; do not record the placeholder as the catalog.
 - A `--model cpa/<id>` for an ID that is not registered prints `Warning: Model "<id>" not found for provider "cpa". Using custom model id.` and falls back to the provider-default Chat Completions API. Warm the cache before using chat routing as proof.
 - The CPA snapshot cache key includes the provider name and base URL. Changing either produces a fresh cache and a new discovery cycle.
-- `pi --list-models` reads the persisted snapshot; it does not force a network refresh.
-- With only `CLIPROXYAPI_API_KEY` set and no stored `/login` credential, `pi --list-models` can repeat discovery without the `Authorization` header (observed with pi 1.5.0). The fake upstream accepts it, so the table stays correct; prove bearer auth with the TUI startup request or a chat request instead.
+- `pi --list-models` reads the persisted snapshot. With pi 1.5.0 it never contacts the upstream, even when only `CLIPROXYAPI_API_KEY` is set and no `/login` credential is stored; prove bearer auth with the TUI startup request or a chat request instead.
 - The model inspector stays open after it renders. A slash command sent while it is open is interpreted as a filter or selection, not a command. Close it with `Escape` before the next journey.
 - models.dev metadata comes from the bundled snapshot on a first run. No public network is needed for enrichment in this harness.
 - The provider registers every upstream ID. A missing row means discovery returned fewer models, not that the package filtered one out.

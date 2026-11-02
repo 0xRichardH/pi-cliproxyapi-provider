@@ -221,9 +221,18 @@ cmd_doctor() {
   [ $failures -eq 0 ] || fail "$failures doctor check(s) failed"
 }
 
+free_artifact_name() {
+  local base=$1
+  [ ! -e "$RUN/artifacts/$base.txt" ] && { printf '%s' "$base"; return; }
+  local n=2
+  while [ -e "$RUN/artifacts/$base-$n.txt" ]; do n=$((n + 1)); done
+  printf '%s' "$base-$n"
+}
+
 cmd_capture() {
   resolve_run
-  local name=${1:-capture}
+  local name
+  if [ $# -ge 1 ]; then name=$1; else name=$(free_artifact_name capture); fi
   local path="$RUN/artifacts/$name.txt"
   mkdir -p "$(dirname "$path")"
   tmux capture-pane -p -t "$SESSION" -S -300 > "$path"
@@ -235,7 +244,8 @@ cmd_send() {
   resolve_run
   [ $# -ge 1 ] || fail "usage: cpa-verify send <text> [artifact-name]"
   local text=$1
-  local name=${2:-$(slug "$text")}
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name "$(slug "$text")"); fi
   tmux send-keys -t "$SESSION" "$text" Enter
   sleep "${CPA_VERIFY_WAIT:-3}"
   cmd_capture "$name"
@@ -245,7 +255,8 @@ cmd_key() {
   resolve_run
   [ $# -ge 1 ] || fail "usage: cpa-verify key <Key> [artifact-name]"
   local key=$1
-  local name=${2:-"key-$(slug "$key")"}
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name "key-$(slug "$key")"); fi
   tmux send-keys -t "$SESSION" "$key"
   sleep "${CPA_VERIFY_WAIT:-1}"
   cmd_capture "$name"
@@ -261,7 +272,8 @@ cmd_wait() {
 cmd_list_models() {
   resolve_run
   local search=${1:-cpa}
-  local name=${2:-list-models}
+  local name
+  if [ $# -ge 2 ]; then name=$2; else name=$(free_artifact_name list-models); fi
   local path="$RUN/artifacts/$name.txt"
   mkdir -p "$(dirname "$path")"
   set +e
@@ -278,7 +290,8 @@ cmd_chat() {
   [ $# -ge 2 ] || fail "usage: cpa-verify chat <provider/model> <prompt> [artifact-name]"
   local model=$1
   local prompt=$2
-  local name=${3:-"chat-$(slug "$model")"}
+  local name
+  if [ $# -ge 3 ]; then name=$3; else name=$(free_artifact_name "chat-$(slug "$model")"); fi
   local path="$RUN/artifacts/$name.txt"
   local before
   before=$(wc -l < "$RUN/server/requests.jsonl")
@@ -384,6 +397,15 @@ cmd_settings() {
   esac
 }
 
+cmd_reset() {
+  resolve_run
+  rm -rf "$WORK_DIR/.pi/pi-cliproxyapi-provider"
+  rm -f "$WORK_DIR/.pi/settings.json" "$HOME_DIR/.pi/agent/settings.json" "$HOME_DIR/.pi/agent/pi-cliproxyapi-provider/config.json"
+  curl -fsS -X POST "http://127.0.0.1:$PORT/__verify/reset" >/dev/null
+  echo "reset project config, provider settings, connection config, and fake catalog"
+  cmd_restart
+}
+
 cmd_env() {
   resolve_run
   cat "$RUN/run.env"
@@ -396,6 +418,7 @@ usage: cpa-verify <command> [args]
   start [run-id]              start fake CLIProxyAPI and a pi TUI in tmux
   stop                        stop the tmux session and fake upstream, keep artifacts
   restart                     restart only the pi TUI against the same upstream
+  reset                       clear project config, settings, connection config, and catalog, then restart
   doctor                      read-only readiness checks for the active run
   send <text> [name]          type a TUI command, press Enter, capture the pane
   key <Key> [name]            send one tmux key (Enter, Escape, Tab, Down, C-c)
@@ -418,6 +441,7 @@ case "${1:-}" in
   start) shift; cmd_start "$@" ;;
   stop) shift; cmd_stop "$@" ;;
   restart) shift; cmd_restart "$@" ;;
+  reset) shift; cmd_reset "$@" ;;
   doctor) shift; cmd_doctor "$@" ;;
   send) shift; cmd_send "$@" ;;
   key) shift; cmd_key "$@" ;;

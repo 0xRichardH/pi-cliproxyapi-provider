@@ -21,7 +21,7 @@ Refresh re-reads one or both catalog sources and updates the running provider im
 Preconditions:
 
 - `cpa-verify doctor` passes.
-- The run is at baseline with four fixture models. If an earlier journey changed the catalog or config, run `cpa-verify catalog reset`, `cpa-verify config clear`, and `cpa-verify restart`.
+- The run is at baseline with four fixture models. If an earlier journey changed the catalog or config, run `cpa-verify reset`.
 
 - **Add a model upstream.** Run `cpa-verify catalog add gpt-5.6-sol openai`. The upstream responds with five models.
 - **Refresh models.** Run `cpa-verify send "/cliproxyapi refresh models" refresh/models`, then `cpa-verify wait 3 refresh/models-after`. The captured pane shows `CPA models: updated`, `models.dev metadata: not requested`, and `Registered: 5 models, 4 enriched, 1 unmatched.`
@@ -36,8 +36,9 @@ Preconditions:
 
 - `refresh` with no argument refreshes both sources and reaches `https://models.dev/api.json`. The fake upstream cannot intercept that request. Run it only when public network access is acceptable, and report a metadata path as unverified when it is not.
 - `refresh models` never contacts models.dev. Prefer it for offline runs.
+- With `CLIPROXYAPI_MODELS_DEV_ENABLED=false`, `refresh` and `refresh metadata` report `models.dev metadata: not requested` and never touch the network.
 - A failed refresh retains the previous snapshot and still reports the previous registered count. That is the expected result, not a failed assertion.
 - `catalog reset` changes only the fake upstream. The running provider keeps the refreshed catalog until the next refresh.
-- The manual refresh timeout is 10 seconds; a hung upstream surfaces as a timeout failure and retains the snapshot.
+- Manual CPA discovery uses a 10-second timeout, and models.dev always uses the same 10-second timeout. A full refresh runs the two sources sequentially, so allow about 20 seconds before calling it hung.
 - The notification can render after the default capture. Always add the follow-up `wait 3` before asserting a refresh result.
 - A successful models refresh writes the CPA cache. A separate `list-models` process reads that cache, so it can prove persistence even though the TUI holds the live provider.

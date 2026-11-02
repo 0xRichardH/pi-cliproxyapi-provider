@@ -21,7 +21,7 @@ Configuration covers the tabbed `/cliproxyapi config` panel and the connection e
 Preconditions:
 
 - `cpa-verify doctor` passes.
-- The run is at baseline: no project config, no provider settings, canonical context mode. If an earlier journey left state, run `cpa-verify config clear`, `cpa-verify settings clear`, `cpa-verify catalog reset`, and `cpa-verify restart`.
+- The run is at baseline: no project config, no provider settings, no global connection config, canonical context mode. If an earlier journey left state, run `cpa-verify reset`.
 - The TUI is 160x50, so the panel is not clipped.
 
 - **Open the panel.** Run `cpa-verify send "/cliproxyapi config" config/panel`. The pane shows `Connection / Models / Display` and the `Endpoint and authentication` row for `cpa`.
@@ -38,10 +38,12 @@ Preconditions:
 ## Gotchas
 
 - Environment variables override config at runtime. The harness sets `CLIPROXYAPI_BASE_URL`, so after the connection editor writes the same URL, status still reports the environment value. Prove the write with the config file, and prove the effective endpoint with `/cliproxyapi status`.
-- `Escape` saves and reloads even when nothing changed. Wait at least 5 seconds before the next assertion.
+- `Escape` saves and reloads only when a setting changed. With no change the panel closes without saving or reloading. A `Reloaded keybindings...` line already in the pane can be scrollback from an earlier save, so compare before and after rather than grepping once.
 - Panel tab order is Connection, then Models, then Display, then back to Connection.
 - The panel writes to project `.pi/settings.json` when it exists, otherwise to `home/.pi/agent/settings.json`. This harness has no project settings, so the global file is the expected destination.
 - The auth-header prompt appears only when auth is required. Choosing `No` for auth skips it and writes `authHeader: false`.
 - Full context mode plus the model inspector can write an invalid override. See `aliases-and-overrides.md` under Gotchas; keep the inspector journey in canonical mode.
+- `showStrictMode` only adds a strict column to `/cliproxyapi models`. It does not change registration, requests, or the `--list-models` table.
+- `config clear` and `settings clear` leave the global connection config written by the connection editor. Use `cpa-verify reset` to return the whole run to baseline.
 - The connection editor writes global config under the run's isolated `HOME`. It never touches the real user config.
 - A reload keeps the fake upstream port and the cached catalog; it does not restart the run.

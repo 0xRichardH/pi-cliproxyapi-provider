@@ -12,6 +12,7 @@ The fake upstream is verification scaffolding. Everything else is the real packa
 ## Before you start
 
 - Required tools: `pi` (record the version; the harness expects 1.5.0), `node`, `tmux`, `curl`, `bash`.
+- The package's peer dependency floor is `@earendil-works/pi-* >=0.87.0`. An older pi cannot load the extension; run `cpa-verify doctor` before blaming discovery.
 - Run `npm ci` once in the repo if you also intend to run `npm test` or `npm run typecheck`. Launching pi with `-e .` works without `node_modules`.
 - Never point this harness at your real `HOME`. Each run gets its own `HOME`, cache, config, and pi session under `/tmp/cpa-verify/<run-id>/`.
 - Never drive a pi session that this harness did not start.
@@ -63,7 +64,7 @@ TUI actions go through tmux:
 .cursor/skills/verify-cpa-provider/scripts/cpa-verify capture status/current
 ```
 
-`send` types the whole line and presses Enter in one tmux call, which avoids pi's slash-command autocomplete consuming the first Enter, then settles for 3 seconds before capturing. If a command ever appears unsubmitted, send `key Enter` once more. Add `wait 3` after a refresh when its notification renders late. `wait` is required after actions that reload pi (`Esc` in `/cliproxyapi config` or `/cliproxyapi models`, and `restart`).
+`send` types the whole line and presses Enter in one tmux call, which avoids pi's slash-command autocomplete consuming the first Enter, then settles for 3 seconds before capturing. If a command ever appears unsubmitted, send `key Enter` once more. Add `wait 3` after a refresh when its notification renders late. `wait` is required after actions that reload pi (`Esc` in `/cliproxyapi config` after changing a setting, `Esc` in `/cliproxyapi models` after saving an override, and `restart`).
 
 CLI actions run in a fresh pi process with the same isolated environment:
 
@@ -121,6 +122,7 @@ All helpers live in `.cursor/skills/verify-cpa-provider/scripts/` and are execut
 | `cpa-verify start [run-id]` | Start the fake upstream and the pi TUI, then wait for discovery. |
 | `cpa-verify stop` | Stop the session and upstream; keep artifacts. |
 | `cpa-verify restart` | Restart only the TUI against the same upstream (after writing project config). |
+| `cpa-verify reset` | Clear project config, provider settings, global connection config, and the fake catalog, then restart. |
 | `cpa-verify doctor` | Read-only readiness checks. |
 | `cpa-verify send <text> [name]` | Type a TUI command, submit, settle, capture. |
 | `cpa-verify key <Key> [name]` | Send one key (`Enter`, `Escape`, `Tab`, `Down`, `C-c`). |
@@ -142,5 +144,4 @@ Read [features/README.md](features/README.md) before choosing a journey. It inde
 
 ## Known failures
 
-- The model inspector can write a context-window override that the config parser rejects when `gpt56ContextWindow` is `full`. See `features/aliases-and-overrides.md` under Gotchas for the exact repro. Keep the context mode canonical when exercising that inspector path, or cycle to an allowed preset.
-- With only `CLIPROXYAPI_API_KEY` set and no stored `/login` credential, non-interactive `pi --list-models` can repeat model discovery without the `Authorization` header (observed with pi 1.5.0). The fake upstream accepts it; prove bearer auth with the TUI startup request or a chat request.
+- The model inspector can save an effective value that is not an allowed override preset. In `full` context mode the first non-auto value is the derived models.dev limit (`1050000` for the fixtures); canonical windows for other families (`400000`, `500000`) and out-of-preset max-token values fail the same way. The next reload reports `modelOverrides.<id>.<field> must be one of ...`, and `--list-models` then shows only `login-required`. See `features/aliases-and-overrides.md` under Gotchas for the repro and recovery.

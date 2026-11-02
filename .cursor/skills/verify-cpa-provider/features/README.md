@@ -16,7 +16,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 | `unknown-local` | `feedmob-litellm` | `completions` | 128K | 16.4K | no | no |
 
 - Baseline status: `Models: 4 (3 enriched, 1 unmatched)`, `Reasoning models: 3`, `Image-capable models: 3`, `models.dev metadata: bundled`.
-- Baseline has no project config at `work/.pi/pi-cliproxyapi-provider/config.json` and no provider settings in `home/.pi/agent/settings.json`.
+- Baseline has no project config at `work/.pi/pi-cliproxyapi-provider/config.json`, no provider settings in `home/.pi/agent/settings.json`, and no global connection config at `home/.pi/agent/pi-cliproxyapi-provider/config.json`.
 - The fake upstream does not validate API keys. Auth proof is the `Authorization: Bearer verify-key` header recorded in `server/requests.jsonl`.
 - Never drive an instance that this verification run did not start.
 
@@ -25,13 +25,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 After a journey that mutates config, settings, or the fake catalog:
 
 ```bash
-cpa-verify config clear
-cpa-verify settings clear
-cpa-verify catalog reset
-cpa-verify restart
+cpa-verify reset
 ```
 
-`restart` re-reads project config and settings and rediscovers the four fixtures.
+`reset` clears project config, provider settings, the global connection config, and the fake catalog, then restarts the TUI. `restart` re-reads project config and settings and rediscovers the four fixtures.
 
 ## Driving conventions
 
@@ -39,7 +36,7 @@ cpa-verify restart
 - Treat every command as literal. Keep quoted names and flags unchanged.
 - Run TUI actions through `cpa-verify send` and `cpa-verify key`. Run CLI actions through `cpa-verify list-models` and `cpa-verify chat`.
 - Run one drive at a time. The upstream request log is shared, so parallel chats make the per-call request slice ambiguous.
-- After `Escape` in `/cliproxyapi config` or `/cliproxyapi models`, wait at least 5 seconds before asserting: pi saves and reloads.
+- After `Escape` in `/cliproxyapi config` or `/cliproxyapi models`, wait at least 5 seconds before asserting: pi saves and reloads when a setting or override changed.
 - After writing project config, run `cpa-verify restart`; project config is read when the extension loads.
 - Prefer the `list-models` table for deterministic assertions. Use `requests` for side effects and `capture` for TUI state.
 - Use artifact names that identify the feature and step, for example `refresh/models-updated` or `aliases/baseline`.
