@@ -92,12 +92,12 @@ function claudeModel(id: string, compat?: ProviderModelConfigLike["compat"]): Pr
   };
 }
 
-test("adds the Anthropic adaptive thinking compat flag to Claude models only", () => {
+test("adds the Anthropic adaptive thinking compat flag to models on the Anthropic Messages API", () => {
   const registration = registrationForModels([
     claudeModel("claude-opus-5"),
     claudeModel("0xdev/claude-sonnet-4-6"),
     { ...claudeModel("gemini-3-pro"), api: undefined },
-    { ...claudeModel("not-claude-opus"), api: undefined },
+    { ...claudeModel("aliased-model"), api: "anthropic-messages" },
   ]);
 
   const models = registration.config.models ?? [];
@@ -110,22 +110,27 @@ test("adds the Anthropic adaptive thinking compat flag to Claude models only", (
     forceAdaptiveThinking: true,
   });
   assert.deepEqual(models[2]?.compat, { supportsStrictMode: false });
-  assert.deepEqual(models[3]?.compat, { supportsStrictMode: false });
+  assert.deepEqual(models[3]?.compat, {
+    supportsStrictMode: false,
+    forceAdaptiveThinking: true,
+  });
   assert.equal(models[0]?.api, "anthropic-messages");
   // CLIProxyAPI rejects the per-message output_config this flag would produce.
   assert.equal((models[0]?.compat as Record<string, unknown>).supportsMidConvoEffort, undefined);
 });
 
-test("gives Claude models a base URL without the OpenAI-compatible /v1 suffix", () => {
+test("gives Anthropic Messages models a base URL without the OpenAI-compatible /v1 suffix", () => {
   const registration = registrationForModels([
     claudeModel("claude-opus-5"),
     { ...claudeModel("gemini-3-pro"), api: undefined },
+    claudeModel("aliased-model"),
   ]);
 
   // Pi's Anthropic driver appends /v1/messages itself; reusing the provider
   // base URL verbatim would request /v1/v1/messages.
   assert.equal(registration.config.models?.[0]?.baseUrl, "http://localhost:8317");
   assert.equal(registration.config.models?.[1]?.baseUrl, undefined);
+  assert.equal(registration.config.models?.[2]?.baseUrl, "http://localhost:8317");
   assert.equal(registration.config.baseUrl, "http://localhost:8317/v1");
 });
 
