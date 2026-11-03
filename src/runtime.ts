@@ -1,6 +1,5 @@
 import type { RefreshModelsContext } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
-import { getDiscoveryApiKey } from "./auth.ts";
 import { ProviderCatalog, type CatalogRefreshResult, type CatalogSnapshot, type RefreshTarget } from "./catalog.ts";
 import { buildUnavailableProviderModels } from "./provider.ts";
 import { buildProviderRegistration, normalizeProviderModels } from "./registration.ts";
@@ -48,7 +47,7 @@ export class ProviderRuntime {
     const credential = context.credential;
     const keyFn: () => Promise<string | undefined> = credential?.type === "api_key"
       ? async () => credential.key
-      : () => getDiscoveryApiKey(this.options.config.providerName);
+      : async () => undefined;
     const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
     // Pi publishes refreshModels' return value synchronously. Registering here as
     // well would create a second, competing catalog publication.
