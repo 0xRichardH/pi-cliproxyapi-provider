@@ -1,5 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { ProviderCatalog } from "../src/catalog.ts";
+import { cpaModelsCachePath } from "../src/discovery.ts";
 import { ProviderRuntime } from "../src/runtime.ts";
 import type { CpaProviderConfig } from "../src/types.ts";
 
@@ -63,6 +68,7 @@ test("runtime registers cached models immediately and refreshes without reload",
 
 test("runtime refreshModels invokes a models-only catalog refresh with network when allowNetwork is true", async () => {
   const catalog = {
+    current: () => undefined,
     load: async () => snapshot("cached"),
     refresh: async (target: string, mode: string, _getApiKey: any, signal?: AbortSignal) => {
       assert.equal(target, "models");
@@ -214,4 +220,57 @@ test("runtime refreshModels leaves publication to Pi", async () => {
 
   assert.equal(models[0].id, "fresh");
   assert.equal(registrations.length, 1);
+});
+
+test("runtime offline refreshModels reuses the loaded snapshot instead of re-reading caches", async () => {
+  // Pi runs an offline refresh of every provider each time any extension
+  // registers a provider, so startup can call this several times in a row.
+  const home = await mkdtemp(join(tmpdir(), "pi-cpa-runtime-"));
+  const originalHome = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    const fallback = join(home, "models-dev-fallback.json");
+    await writeFile(fallback, JSON.stringify({ openai: { models: { cached: { id: "cached", name: "Cached" } } } }));
+    const cachePath = cpaModelsCachePath(config);
+    await mkdir(dirname(cachePath), { recursive: true });
+    await writeFile(cachePath, JSON.stringify({ fetchedAt: Date.now(), data: [{ id: "cached", owned_by: "openai" }] }));
+
+    const catalog = new ProviderCatalog({ config, gpt56ContextWindow: "canonical", bundledModelsDevPath: fallback });
+    let loads = 0;
+    const load = catalog.load.bind(catalog);
+    catalog.load = async () => {
+      loads += 1;
+      return load();
+    };
+    const runtime = new ProviderRuntime({ pi: { registerProvider: () => {} } as any, config, catalog });
+
+    await runtime.start();
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () => runtime.refreshModels(refreshContext({ allowNetwork: false }))),
+    );
+
+    assert.equal(loads, 1);
+    for (const models of results) assert.equal(models[0].id, "cached");
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("runtime offline refreshModels loads caches when no snapshot exists yet", async () => {
+  let loads = 0;
+  const catalog = {
+    current: () => undefined,
+    load: async () => {
+      loads += 1;
+      return snapshot("cached");
+    },
+  };
+  const runtime = new ProviderRuntime({ pi: { registerProvider: () => {} } as any, config, catalog: catalog as any });
+
+  const models = await runtime.refreshModels(refreshContext({ allowNetwork: false }));
+
+  assert.equal(loads, 1);
+  assert.equal(models[0].id, "cached");
 });
