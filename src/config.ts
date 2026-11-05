@@ -201,7 +201,17 @@ function parseModelOverrides(value: unknown, scope: string): ProviderModelOverri
   return parsed;
 }
 
-const ALLOWED_API_KEY_COMMANDS = new Set(["bw", "op", "cat"]);
+const ALLOWED_API_KEY_COMMANDS = new Map<string, readonly string[]>([
+  ["bw", ["get"]],
+  ["op", ["read"]],
+  ["cat", []],
+  ["secret-tool", ["lookup"]],
+  ["gpg", ["--decrypt", "-d"]],
+  ["pass", ["show"]],
+  ["security", ["find-generic-password", "find-internet-password"]],
+]);
+
+const API_KEY_COMMAND_USAGE = "bw get, op read, cat, secret-tool lookup, gpg --decrypt, pass show, security find-generic-password";
 
 function validateApiKeyCommand(value: string, path: string): void {
   const command = value.slice(1);
@@ -210,7 +220,7 @@ function validateApiKeyCommand(value: string, path: string): void {
   let quote: "'" | '"' | undefined;
   for (const char of command) {
     if (char === "\n" || char === "\r") {
-      throw new Error(`apiKey command must be one of: bw, op, cat in config file: ${path}`);
+      throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} in config file: ${path}`);
     }
     if (quote) {
       if (char === quote) quote = undefined;
@@ -229,14 +239,15 @@ function validateApiKeyCommand(value: string, path: string): void {
       continue;
     }
     if (";&|<>$()`\\".includes(char)) {
-      throw new Error(`apiKey command must be one of: bw, op, cat without shell operators in config file: ${path}`);
+      throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} without shell operators in config file: ${path}`);
     }
     token += char;
   }
   if (quote) throw new Error(`apiKey command has an unterminated quote in config file: ${path}`);
   if (token) tokens.push(token);
-  if (!ALLOWED_API_KEY_COMMANDS.has(tokens[0] ?? "")) {
-    throw new Error(`apiKey command must be one of: bw, op, cat in config file: ${path}`);
+  const allowedSubcommands = ALLOWED_API_KEY_COMMANDS.get(tokens[0] ?? "");
+  if (!allowedSubcommands || (allowedSubcommands.length > 0 && !allowedSubcommands.includes(tokens[1] ?? ""))) {
+    throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} in config file: ${path}`);
   }
 }
 
