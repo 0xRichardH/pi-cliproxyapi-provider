@@ -59,6 +59,24 @@ test("authenticated discovery requires resolved credentials and preserves cache 
     const result = await catalog.refresh("models", "manual", async () => "resolved-key");
     assert.equal(result.models.updated, true);
     assert.equal(fetches, 1);
+
+    const staticCatalog = new ProviderCatalog({
+      config: { ...config, authHeader: false, headers: { "X-Api-Key": "static-key" } },
+      gpt56ContextWindow: "canonical",
+      bundledModelsDevPath: "unused",
+    });
+    await staticCatalog.load();
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      fetches++;
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("authorization"), null);
+      assert.equal(headers.get("x-api-key"), "static-key");
+      return new Response(JSON.stringify({ data: [{ id: "static-fresh" }] }), { status: 200 });
+    }) as typeof fetch;
+    const staticResult = await staticCatalog.refresh("models", "manual", async () => undefined);
+    assert.equal(staticResult.models.error, undefined);
+    assert.deepEqual(staticResult.snapshot.cpaModels.map((model) => model.id), ["static-fresh"]);
+    assert.equal(fetches, 2);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome;

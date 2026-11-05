@@ -157,8 +157,9 @@ export class ProviderCatalog {
 
     if (models.attempted) {
       try {
-        const apiKey = this.options.config.authRequired ? await getDiscoveryApiKey?.() : undefined;
-        if (this.options.config.authRequired && !apiKey) {
+        const requiresKey = this.options.config.authRequired && this.options.config.authHeader;
+        const apiKey = requiresKey ? await getDiscoveryApiKey?.() : undefined;
+        if (requiresKey && !apiKey) {
           throw new Error("CPA discovery requires a resolved credential");
         }
         const fresh = await fetchCpaModels(

@@ -49,6 +49,7 @@ export class ProviderRuntime {
       ? async () => credential.key
       : async () => undefined;
     const result = await this.options.catalog.refresh("models", mode, keyFn, context.signal);
+    if (result.models.error) throw result.models.error;
     // Pi publishes refreshModels' return value synchronously. Registering here as
     // well would create a second, competing catalog publication.
     return normalizeProviderModels(
