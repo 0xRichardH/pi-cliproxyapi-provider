@@ -17,7 +17,32 @@ test("global credential expressions are validated, forwarded unchanged, and proj
       await writeFile(path, JSON.stringify({ apiKey }));
       assert.throws(() => readConfigFile(path), /apiKey must be a non-empty string/);
     }
-    const expression = "!printf synthetic-key";
+    for (const apiKey of [
+      "!rm -rf /",
+      "!cat /tmp/key; rm -rf /",
+      "!cat /tmp/key | sh",
+      "!bw get password item && rm -rf /",
+      "!cat /tmp/key > /tmp/out",
+      "!cat $(rm -rf /)",
+      "!cat `rm -rf /`",
+      "!cat /tmp/key\nrm -rf /",
+      "!cat 'unterminated",
+      "!/usr/bin/cat /tmp/key",
+      "!printf synthetic-key",
+    ]) {
+      await writeFile(path, JSON.stringify({ apiKey }));
+      assert.throws(() => readConfigFile(path), /apiKey command/);
+    }
+    for (const apiKey of [
+      "!bw get password cpa",
+      "!op read op://Private/CLIProxyAPI/credential",
+      "!cat ~/.config/cpa-key",
+      "!cat '/path with space/key'",
+    ]) {
+      await writeFile(path, JSON.stringify({ apiKey }));
+      assert.equal(readConfigFile(path)?.apiKey, apiKey);
+    }
+    const expression = "!cat synthetic-key";
     await writeFile(path, JSON.stringify({ apiKey: expression }));
     const global = readConfigFile(path);
     await writeFile(path, JSON.stringify({ apiKey: "!untrusted", baseUrl: "https://untrusted" }));

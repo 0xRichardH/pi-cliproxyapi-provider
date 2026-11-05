@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,7 +27,11 @@ test("Pi host resolves credentials and reloads changed CPA configuration", async
     const writeGlobal = (config: Record<string, unknown>) =>
       writeFile(join(configDir, "config.json"), JSON.stringify({ modelsDevEnabled: false, ...config }));
     const setExpression = (apiKey: string) => writeGlobal({ apiKey });
-    await setExpression("!printf synthetic-one");
+    const oneFile = join(home, "one-key");
+    const twoFile = join(home, "two-key");
+    await writeFile(oneFile, "synthetic-one");
+    await writeFile(twoFile, "synthetic-two");
+    await setExpression(`!cat '${oneFile}'`);
     const seen: (string | null)[] = [];
     globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
       seen.push(new Headers(init?.headers).get("authorization"));
@@ -44,7 +48,7 @@ test("Pi host resolves credentials and reloads changed CPA configuration", async
     assert.equal(result.errors.size, 0);
     assert.equal(seen.at(-1), "Bearer synthetic-one");
     assert.ok(runtime.getModel("cpa", "synthetic-model"));
-    await setExpression("!printf synthetic-two");
+    await setExpression(`!cat '${twoFile}'`);
     await session.reload();
     const afterReload = await runtime.refresh({ providers: ["cpa"], allowNetwork: true, force: true });
     assert.equal(afterReload.errors.size, 0);
@@ -67,16 +71,18 @@ test("Pi host resolves credentials and reloads changed CPA configuration", async
     assert.equal(seen.at(-1), "Bearer synthetic-env");
     delete process.env.CLIPROXYAPI_API_KEY;
 
-    await setExpression("!printf synthetic-project-guard");
+    const guardFile = join(home, "guard-key");
+    await writeFile(guardFile, "synthetic-project-guard");
+    await setExpression(`!cat '${guardFile}'`);
     const projectConfigDir = join(home, ".pi", "pi-cliproxyapi-provider");
-    const marker = join(home, "project-command-ran");
+    const projectFile = join(home, "project-key");
+    await writeFile(projectFile, "synthetic-project-value");
     await mkdir(projectConfigDir, { recursive: true });
-    await writeFile(join(projectConfigDir, "config.json"), JSON.stringify({ apiKey: `!touch '${marker}'` }));
+    await writeFile(join(projectConfigDir, "config.json"), JSON.stringify({ apiKey: `!cat '${projectFile}'` }));
     await session.reload();
     const projectGuard = await runtime.refresh({ providers: ["cpa"], allowNetwork: true, force: true });
     assert.equal(projectGuard.errors.size, 0);
     assert.equal(seen.at(-1), "Bearer synthetic-project-guard");
-    await assert.rejects(access(marker));
     await rm(projectConfigDir, { recursive: true, force: true });
 
     const manual = async () => {
@@ -109,7 +115,7 @@ test("Pi host resolves credentials and reloads changed CPA configuration", async
     await runtime.removeRuntimeApiKey("cpa");
     await credentials.delete("cpa");
 
-    await setExpression("!exit 1");
+    await setExpression(`!cat '${join(home, "missing-key")}'`);
     await session.reload();
     const count = seen.length;
     const failed = await runtime.refresh({ providers: ["cpa"], allowNetwork: true, force: true });
@@ -122,7 +128,9 @@ test("Pi host resolves credentials and reloads changed CPA configuration", async
     assert.ok(runtime.getModel("cpa", "synthetic-model"));
     assert.ok(seen.every((header) => header !== null && !header.includes("!")));
 
-    await setExpression("!printf synthetic-valid");
+    const validFile = join(home, "valid-key");
+    await writeFile(validFile, "synthetic-valid");
+    await setExpression(`!cat '${validFile}'`);
     await session.reload();
     globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
       seen.push(new Headers(init?.headers).get("authorization"));

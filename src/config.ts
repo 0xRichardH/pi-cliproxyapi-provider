@@ -201,6 +201,45 @@ function parseModelOverrides(value: unknown, scope: string): ProviderModelOverri
   return parsed;
 }
 
+const ALLOWED_API_KEY_COMMANDS = new Set(["bw", "op", "cat"]);
+
+function validateApiKeyCommand(value: string, path: string): void {
+  const command = value.slice(1);
+  const tokens: string[] = [];
+  let token = "";
+  let quote: "'" | '"' | undefined;
+  for (const char of command) {
+    if (char === "\n" || char === "\r") {
+      throw new Error(`apiKey command must be one of: bw, op, cat in config file: ${path}`);
+    }
+    if (quote) {
+      if (char === quote) quote = undefined;
+      else token += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/u.test(char)) {
+      if (token) {
+        tokens.push(token);
+        token = "";
+      }
+      continue;
+    }
+    if (";&|<>$()`\\".includes(char)) {
+      throw new Error(`apiKey command must be one of: bw, op, cat without shell operators in config file: ${path}`);
+    }
+    token += char;
+  }
+  if (quote) throw new Error(`apiKey command has an unterminated quote in config file: ${path}`);
+  if (token) tokens.push(token);
+  if (!ALLOWED_API_KEY_COMMANDS.has(tokens[0] ?? "")) {
+    throw new Error(`apiKey command must be one of: bw, op, cat in config file: ${path}`);
+  }
+}
+
 function validateConfigLayer(value: unknown, path: string): ConfigLayer {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Config file must contain a JSON object: ${path}`);
@@ -223,6 +262,9 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
 
   if (record.apiKey !== undefined && (typeof record.apiKey !== "string" || !record.apiKey.trim())) {
     throw new Error(`apiKey must be a non-empty string in config file: ${path}`);
+  }
+  if (typeof record.apiKey === "string" && record.apiKey.startsWith("!")) {
+    validateApiKeyCommand(record.apiKey, path);
   }
 
   const booleanFields = ["authRequired", "authHeader", "modelsDevEnabled"];
