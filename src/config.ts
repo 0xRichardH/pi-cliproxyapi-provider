@@ -221,6 +221,10 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
     throw new Error(`metadataFallbackProvider must be a non-empty string or null in config file: ${path}`);
   }
 
+  if (record.apiKey !== undefined && (typeof record.apiKey !== "string" || !record.apiKey.trim())) {
+    throw new Error(`apiKey must be a non-empty string in config file: ${path}`);
+  }
+
   const booleanFields = ["authRequired", "authHeader", "modelsDevEnabled"];
   for (const field of booleanFields) {
     if (record[field] !== undefined && typeof record[field] !== "boolean") {

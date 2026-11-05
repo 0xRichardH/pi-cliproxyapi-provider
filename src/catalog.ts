@@ -36,7 +36,6 @@ export interface ProviderCatalogOptions {
   config: CpaProviderConfig;
   gpt56ContextWindow: Gpt56ContextWindowMode;
   bundledModelsDevPath: string;
-  getApiKey: () => Promise<string | undefined>;
   backgroundTimeoutMs?: number;
   manualTimeoutMs?: number;
   writeSnapshot?: typeof writeCache;
@@ -158,7 +157,10 @@ export class ProviderCatalog {
 
     if (models.attempted) {
       try {
-        const apiKey = await (getDiscoveryApiKey ?? this.options.getApiKey)();
+        const apiKey = this.options.config.authRequired ? await getDiscoveryApiKey?.() : undefined;
+        if (this.options.config.authRequired && !apiKey) {
+          throw new Error("CPA discovery requires a resolved credential");
+        }
         const fresh = await fetchCpaModels(
           this.options.config.baseUrl,
           discoveryHeaders(this.options.config, apiKey),

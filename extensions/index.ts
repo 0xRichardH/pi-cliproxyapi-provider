@@ -7,7 +7,6 @@ import { ProviderRuntime } from "../src/runtime.ts";
 import { buildProviderRegistration } from "../src/registration.ts";
 import { buildUnavailableProviderModels } from "../src/provider.ts";
 import { registerCliproxyapiCommand } from "../src/commands.ts";
-import { getDiscoveryApiKey } from "../src/auth.ts";
 import { loadProviderSettings } from "../src/settings.ts";
 import { registerCodexCompatiblePayloadAdapter } from "../src/codex-compat.ts";
 import { registerGatewayTelemetry } from "../src/gateway-telemetry.ts";
@@ -28,7 +27,6 @@ export default async function (pi: ExtensionAPI) {
       config,
       gpt56ContextWindow: settings.gpt56ContextWindow,
       bundledModelsDevPath,
-      getApiKey: () => getDiscoveryApiKey(config.providerName),
     });
     const nextRuntime = new ProviderRuntime({ pi, config, catalog: nextCatalog });
     await nextRuntime.start();

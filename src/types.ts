@@ -21,6 +21,7 @@ export interface CpaProviderConfig {
   providerName: string;
   baseUrl: string;
   authRequired: boolean;
+  apiKey?: string;
   authHeader: boolean;
   headers: Record<string, string>;
   modelsDevEnabled: boolean;

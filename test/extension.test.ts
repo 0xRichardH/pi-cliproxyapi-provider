@@ -42,6 +42,7 @@ test("extension registers provider with refreshModels capability", async () => {
 
       const refreshed = await providers[0].config.refreshModels({
         allowNetwork: true,
+        credential: { type: "api_key", key: "test-key" },
         signal: new AbortController().signal,
         publish: async () => true,
       });
@@ -83,6 +84,7 @@ test("extension applies the full GPT-5.6 context window from settings.json", asy
 
       const refreshed = await providers[0].config.refreshModels({
         allowNetwork: true,
+        credential: { type: "api_key", key: "test-key" },
         signal: new AbortController().signal,
         publish: async () => true,
       });

@@ -40,7 +40,6 @@ function catalog(fallback: string): ProviderCatalog {
     config,
     gpt56ContextWindow: "canonical",
     bundledModelsDevPath: fallback,
-    getApiKey: async () => undefined,
     backgroundTimeoutMs: 50,
   });
 }
@@ -180,7 +179,6 @@ test("snapshot write failure preserves the in-memory CPA snapshot", async () => 
       config,
       gpt56ContextWindow: "canonical",
       bundledModelsDevPath: fallback,
-      getApiKey: async () => undefined,
       writeSnapshot: async () => { throw new Error("disk full"); },
     });
     await instance.load();

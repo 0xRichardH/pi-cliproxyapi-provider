@@ -148,7 +148,9 @@ If you changed the provider name, use that name instead:
 /login 0xdev
 ```
 
-For non-interactive runs, set:
+For non-interactive runs, optionally set `apiKey` in the global CPA config to a Pi credential expression, for example `"apiKey": "!your-command"`. Pi resolves the expression; saved or runtime credentials take precedence. Project config cannot set this field. When omitted, the legacy environment variable below is used. With `authRequired: false`, the configured expression is not used.
+
+Alternatively, set:
 
 ```bash
 export CLIPROXYAPI_API_KEY=your-key
