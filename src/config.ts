@@ -201,6 +201,56 @@ function parseModelOverrides(value: unknown, scope: string): ProviderModelOverri
   return parsed;
 }
 
+const ALLOWED_API_KEY_COMMANDS = new Map<string, readonly string[]>([
+  ["bw", ["get"]],
+  ["op", ["read"]],
+  ["cat", []],
+  ["secret-tool", ["lookup"]],
+  ["gpg", ["--decrypt", "-d"]],
+  ["pass", ["show"]],
+  ["security", ["find-generic-password", "find-internet-password"]],
+]);
+
+const API_KEY_COMMAND_USAGE = "bw get, op read, cat, secret-tool lookup, gpg --decrypt, pass show, security find-generic-password";
+
+function validateApiKeyCommand(value: string, path: string): void {
+  const command = value.slice(1);
+  const tokens: string[] = [];
+  let token = "";
+  let quote: "'" | '"' | undefined;
+  for (const char of command) {
+    if (char === "\n" || char === "\r") {
+      throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} in config file: ${path}`);
+    }
+    if (quote) {
+      if (char === quote) quote = undefined;
+      else token += char;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (/\s/u.test(char)) {
+      if (token) {
+        tokens.push(token);
+        token = "";
+      }
+      continue;
+    }
+    if (";&|<>$()`\\".includes(char)) {
+      throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} without shell operators in config file: ${path}`);
+    }
+    token += char;
+  }
+  if (quote) throw new Error(`apiKey command has an unterminated quote in config file: ${path}`);
+  if (token) tokens.push(token);
+  const allowedSubcommands = ALLOWED_API_KEY_COMMANDS.get(tokens[0] ?? "");
+  if (!allowedSubcommands || (allowedSubcommands.length > 0 && !allowedSubcommands.includes(tokens[1] ?? ""))) {
+    throw new Error(`apiKey command must be one of: ${API_KEY_COMMAND_USAGE} in config file: ${path}`);
+  }
+}
+
 function validateConfigLayer(value: unknown, path: string): ConfigLayer {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Config file must contain a JSON object: ${path}`);
@@ -223,6 +273,9 @@ function validateConfigLayer(value: unknown, path: string): ConfigLayer {
 
   if (record.apiKey !== undefined && (typeof record.apiKey !== "string" || !record.apiKey.trim())) {
     throw new Error(`apiKey must be a non-empty string in config file: ${path}`);
+  }
+  if (typeof record.apiKey === "string" && record.apiKey.startsWith("!")) {
+    validateApiKeyCommand(record.apiKey, path);
   }
 
   const booleanFields = ["authRequired", "authHeader", "modelsDevEnabled"];

@@ -17,7 +17,46 @@ test("global credential expressions are validated, forwarded unchanged, and proj
       await writeFile(path, JSON.stringify({ apiKey }));
       assert.throws(() => readConfigFile(path), /apiKey must be a non-empty string/);
     }
-    const expression = "!printf synthetic-key";
+    for (const apiKey of [
+      "!rm -rf /",
+      "!cat /tmp/key; rm -rf /",
+      "!cat /tmp/key | sh",
+      "!bw get password item && rm -rf /",
+      "!cat /tmp/key > /tmp/out",
+      "!cat $(rm -rf /)",
+      "!cat `rm -rf /`",
+      "!cat /tmp/key\nrm -rf /",
+      "!cat 'unterminated",
+      "!/usr/bin/cat /tmp/key",
+      "!printf synthetic-key",
+      "!bw delete item",
+      "!bw",
+      "!op run -- printenv KEY",
+      "!op inject -o /tmp/out",
+      "!gpg --gen-key",
+      "!pass insert cpa/api-key",
+      "!secret-tool store service cpa",
+      "!security dump-keychain",
+    ]) {
+      await writeFile(path, JSON.stringify({ apiKey }));
+      assert.throws(() => readConfigFile(path), /apiKey command/);
+    }
+    for (const apiKey of [
+      "!bw get password cpa",
+      "!op read op://Private/CLIProxyAPI/credential",
+      "!cat ~/.config/cpa-key",
+      "!cat '/path with space/key'",
+      "!secret-tool lookup service cpa key api-key",
+      "!gpg --decrypt ~/.config/cpa-key.gpg",
+      "!gpg -d ~/.config/cpa-key.gpg",
+      "!pass show cpa/api-key",
+      "!security find-generic-password -s cpa -w",
+      "!security find-internet-password -s cpa -w",
+    ]) {
+      await writeFile(path, JSON.stringify({ apiKey }));
+      assert.equal(readConfigFile(path)?.apiKey, apiKey);
+    }
+    const expression = "!cat synthetic-key";
     await writeFile(path, JSON.stringify({ apiKey: expression }));
     const global = readConfigFile(path);
     await writeFile(path, JSON.stringify({ apiKey: "!untrusted", baseUrl: "https://untrusted" }));
