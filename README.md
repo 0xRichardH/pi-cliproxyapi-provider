@@ -148,7 +148,9 @@ If you changed the provider name, use that name instead:
 /login 0xdev
 ```
 
-For non-interactive runs, optionally set `apiKey` in the global CPA config to a Pi credential expression, for example `"apiKey": "!your-command"`. Pi resolves the expression; saved or runtime credentials take precedence. Project config cannot set this field. When omitted, the legacy environment variable below is used. With `authRequired: false`, the configured expression is not used.
+For non-interactive runs, optionally set `apiKey` in the global CPA config to a Pi credential expression, for example `"apiKey": "!cat ~/.config/cpa-key"`. Pi resolves the expression; saved or runtime credentials take precedence. Project config cannot set this field. When omitted, the legacy environment variable below is used. With `authRequired: false`, the configured expression is not used.
+
+Keep secrets out of the command text. Pi includes the command verbatim in resolver errors, so a command that embeds a token can leak it into logs and notifications. Read the key from a file or a credential manager instead.
 
 Alternatively, set:
 
